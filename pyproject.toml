@@ -1,0 +1,34 @@
+[tool.poetry]
+name = "financial-report-analyzer"
+version = "0.1.0"
+description = "A股上市公司财务报表分析系统 / A-Share Financial Report Analyzer"
+authors = ["Your Name <your.email@example.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+fastapi = "^0.109.0"
+uvicorn = {extras = ["standard"], version = "^0.27.0"}
+pydantic = "^2.5.0"
+pydantic-settings = "^2.1.0"
+akshare = "^1.13.0"
+pandas = "^2.1.0"
+numpy = "^1.26.0"
+redis = "^5.0.0"
+mysql-connector-python = "^8.3.0"
+sqlalchemy = "^2.0.0"
+loguru = "^0.7.0"
+openpyxl = "^3.1.0"
+matplotlib = "^3.8.0"
+langchain = "^0.1.0"
+langchain-openai = "^0.0.5"
+python-dotenv = "^1.0.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.0"
+pytest-asyncio = "^0.23.0"
+httpx = "^0.26.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
