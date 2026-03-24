@@ -1,47 +1,23 @@
-"""
-====================================================================
-模块名称：dependencies.py
-模块功能：FastAPI 依赖注入
+"""FastAPI dependency providers."""
 
-【函数接口总览】
-┌─────────────────────────────┬────────────────────────────┬─────────────────────────┐
-│ 函数名                       │ 输入                        │ 输出                     │
-├─────────────────────────────┼────────────────────────────┼─────────────────────────┤
-│ get_akshare_client()         │ 无                          │ AKShareClient            │
-└─────────────────────────────┴────────────────────────────┴─────────────────────────┘
+from functools import lru_cache
 
-【数据流向】
-→ 被所有 API 路由使用（依赖注入）
-====================================================================
-"""
-
-from src.data_fetcher.akshare_client import AKShareClient
+from src.crawler.service import CrawlerService
 
 
-def get_akshare_client() -> AKShareClient:
+@lru_cache(maxsize=1)
+def get_crawler_service() -> CrawlerService:
     """
-    获取 AKShareClient 实例（依赖注入）
+    Return a singleton crawler facade.
 
-    Returns:
-        AKShareClient: AKShare 客户端实例
+    The API layer depends on this abstraction instead of concrete data-fetcher
+    implementations so crawler internals remain decoupled from route logic.
     """
-    return AKShareClient()
+
+    return CrawlerService()
 
 
-"""
-====================================================================
-【使用示例】
+# Backward-compatible alias for legacy code paths.
+def get_akshare_client() -> CrawlerService:
+    return get_crawler_service()
 
-from fastapi import Depends
-from src.api.dependencies import get_akshare_client
-
-@app.get("/stocks/{code}")
-async def get_stock(
-    code: str,
-    client: AKShareClient = Depends(get_akshare_client)
-):
-    data = client.fetch_balance_sheet(code)
-    return data
-
-====================================================================
-"""
