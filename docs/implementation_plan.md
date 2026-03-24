@@ -10,14 +10,14 @@
 
 本项目规划联合调用以下 Skills：
 
-| Skill | 用途 |
-|-------|------|
-| `code-teaching-generator` | 每个模块按四层教学模型（基础→联合→高级→项目）输出，保姆级注释 |
-| `github-project-analyzer` | 开发完成后自动生成项目结构文档、模块关联图 |
-| `first_principles_teaching` | 财务分析核心概念（杜邦分析、自由现金流）的第一性原理教学 |
-| `immersive-coding-tutor` | 关键模块的 5 阶段深度教学 |
-| `mcp-builder` | 后续扩展：将分析能力包装为 MCP 服务 |
-| `webapp-testing` | 前端界面的自动化测试 |
+| Skill                         | 用途                                                             |
+| ----------------------------- | ---------------------------------------------------------------- |
+| `code-teaching-generator`   | 每个模块按四层教学模型（基础→联合→高级→项目）输出，保姆级注释 |
+| `github-project-analyzer`   | 开发完成后自动生成项目结构文档、模块关联图                       |
+| `first_principles_teaching` | 财务分析核心概念（杜邦分析、自由现金流）的第一性原理教学         |
+| `immersive-coding-tutor`    | 关键模块的 5 阶段深度教学                                        |
+| `mcp-builder`               | 后续扩展：将分析能力包装为 MCP 服务                              |
+| `webapp-testing`            | 前端界面的自动化测试                                             |
 
 ---
 
@@ -156,17 +156,17 @@ class BalanceSheet(BaseModel):
     """资产负债表"""
     stock_code: str = Field(..., description="股票代码 / Stock Code")
     report_date: date = Field(..., description="报告期 / Report Date")
-    
+  
     # 资产
     total_current_assets: Decimal = Field(default=Decimal("0"), description="流动资产合计")
     total_non_current_assets: Decimal = Field(default=Decimal("0"), description="非流动资产合计")
     total_assets: Decimal = Field(default=Decimal("0"), description="资产总计")
-    
+  
     # 负债
     total_current_liabilities: Decimal = Field(default=Decimal("0"), description="流动负债合计")
     total_non_current_liabilities: Decimal = Field(default=Decimal("0"), description="非流动负债合计")
     total_liabilities: Decimal = Field(default=Decimal("0"), description="负债合计")
-    
+  
     # 所有者权益
     total_equity: Decimal = Field(default=Decimal("0"), description="所有者权益合计")
 
@@ -174,7 +174,7 @@ class IncomeStatement(BaseModel):
     """利润表"""
     stock_code: str
     report_date: date
-    
+  
     total_revenue: Decimal = Field(default=Decimal("0"), description="营业总收入")
     operating_cost: Decimal = Field(default=Decimal("0"), description="营业总成本")
     operating_profit: Decimal = Field(default=Decimal("0"), description="营业利润")
@@ -185,7 +185,7 @@ class CashFlowStatement(BaseModel):
     """现金流量表"""
     stock_code: str
     report_date: date
-    
+  
     operating_cashflow: Decimal = Field(default=Decimal("0"), description="经营活动现金流量净额")
     investing_cashflow: Decimal = Field(default=Decimal("0"), description="投资活动现金流量净额")
     financing_cashflow: Decimal = Field(default=Decimal("0"), description="筹资活动现金流量净额")
@@ -200,45 +200,45 @@ class CashFlowStatement(BaseModel):
 
 ### 三大报表核心字段
 
-| 中文 | 英文变量名 | 类型 | AKShare 原始列名 | 模糊检索别名 |
-|------|-----------|------|------------------|-------------|
-| 股票代码 | `stock_code` | `str` | `代码` | 证券代码, 股票号 |
-| 报告期 | `report_date` | `date` | `日期` | 报表日期, 财报日期 |
-| **资产负债表** | | | | |
-| 流动资产合计 | `total_current_assets` | `Decimal` | `流动资产合计` | 流动资产总额 |
-| 非流动资产合计 | `total_non_current_assets` | `Decimal` | `非流动资产合计` | 长期资产合计 |
-| 资产总计 | `total_assets` | `Decimal` | `资产总计` | 总资产, 资产合计 |
-| 流动负债合计 | `total_current_liabilities` | `Decimal` | `流动负债合计` | 短期负债合计 |
-| 非流动负债合计 | `total_non_current_liabilities` | `Decimal` | `非流动负债合计` | 长期负债合计 |
-| 负债合计 | `total_liabilities` | `Decimal` | `负债合计` | 总负债, 负债总额 |
-| 所有者权益合计 | `total_equity` | `Decimal` | `所有者权益合计` | 股东权益, 净资产 |
-| **利润表** | | | | |
-| 营业总收入 | `total_revenue` | `Decimal` | `营业总收入` | 营收, 总收入 |
-| 营业总成本 | `operating_cost` | `Decimal` | `营业总成本` | 总成本 |
-| 营业利润 | `operating_profit` | `Decimal` | `营业利润` | 经营利润 |
-| 利润总额 | `total_profit` | `Decimal` | `利润总额` | 税前利润 |
-| 净利润 | `net_income` | `Decimal` | `净利润` | 纯利润, 纯利 |
-| **现金流量表** | | | | |
-| 经营活动现金流量净额 | `operating_cashflow` | `Decimal` | `经营活动产生的现金流量净额` | 经营现金流 |
-| 投资活动现金流量净额 | `investing_cashflow` | `Decimal` | `投资活动产生的现金流量净额` | 投资现金流 |
-| 筹资活动现金流量净额 | `financing_cashflow` | `Decimal` | `筹资活动产生的现金流量净额` | 融资现金流 |
-| **财务比率** | | | | |
-| 净资产收益率 | `roe` / `return_on_equity` | `Decimal` | `净资产收益率(%)` | ROE |
-| 资产负债率 | `debt_to_asset_ratio` | `Decimal` | `资产负债率(%)` | 负债率 |
-| 流动比率 | `current_ratio` | `Decimal` | `流动比率` | — |
-| 市盈率 | `pe_ratio` | `float` | `市盈率-动态` | PE, P/E |
-| 市净率 | `pb_ratio` / `price_to_book` | `float` | `市净率` | PB, P/B |
-| 销售净利率 | `net_profit_margin` | `Decimal` | `销售净利率(%)` | 净利润率 |
+| 中文                 | 英文变量名                        | 类型        | AKShare 原始列名               | 模糊检索别名       |
+| -------------------- | --------------------------------- | ----------- | ------------------------------ | ------------------ |
+| 股票代码             | `stock_code`                    | `str`     | `代码`                       | 证券代码, 股票号   |
+| 报告期               | `report_date`                   | `date`    | `日期`                       | 报表日期, 财报日期 |
+| **资产负债表** |                                   |             |                                |                    |
+| 流动资产合计         | `total_current_assets`          | `Decimal` | `流动资产合计`               | 流动资产总额       |
+| 非流动资产合计       | `total_non_current_assets`      | `Decimal` | `非流动资产合计`             | 长期资产合计       |
+| 资产总计             | `total_assets`                  | `Decimal` | `资产总计`                   | 总资产, 资产合计   |
+| 流动负债合计         | `total_current_liabilities`     | `Decimal` | `流动负债合计`               | 短期负债合计       |
+| 非流动负债合计       | `total_non_current_liabilities` | `Decimal` | `非流动负债合计`             | 长期负债合计       |
+| 负债合计             | `total_liabilities`             | `Decimal` | `负债合计`                   | 总负债, 负债总额   |
+| 所有者权益合计       | `total_equity`                  | `Decimal` | `所有者权益合计`             | 股东权益, 净资产   |
+| **利润表**     |                                   |             |                                |                    |
+| 营业总收入           | `total_revenue`                 | `Decimal` | `营业总收入`                 | 营收, 总收入       |
+| 营业总成本           | `operating_cost`                | `Decimal` | `营业总成本`                 | 总成本             |
+| 营业利润             | `operating_profit`              | `Decimal` | `营业利润`                   | 经营利润           |
+| 利润总额             | `total_profit`                  | `Decimal` | `利润总额`                   | 税前利润           |
+| 净利润               | `net_income`                    | `Decimal` | `净利润`                     | 纯利润, 纯利       |
+| **现金流量表** |                                   |             |                                |                    |
+| 经营活动现金流量净额 | `operating_cashflow`            | `Decimal` | `经营活动产生的现金流量净额` | 经营现金流         |
+| 投资活动现金流量净额 | `investing_cashflow`            | `Decimal` | `投资活动产生的现金流量净额` | 投资现金流         |
+| 筹资活动现金流量净额 | `financing_cashflow`            | `Decimal` | `筹资活动产生的现金流量净额` | 融资现金流         |
+| **财务比率**   |                                   |             |                                |                    |
+| 净资产收益率         | `roe` / `return_on_equity`    | `Decimal` | `净资产收益率(%)`            | ROE                |
+| 资产负债率           | `debt_to_asset_ratio`           | `Decimal` | `资产负债率(%)`              | 负债率             |
+| 流动比率             | `current_ratio`                 | `Decimal` | `流动比率`                   | —                 |
+| 市盈率               | `pe_ratio`                      | `float`   | `市盈率-动态`                | PE, P/E            |
+| 市净率               | `pb_ratio` / `price_to_book`  | `float`   | `市净率`                     | PB, P/B            |
+| 销售净利率           | `net_profit_margin`             | `Decimal` | `销售净利率(%)`              | 净利润率           |
 
 ### 分析相关
 
-| 中文 | 英文变量名 | 类型 | 说明 |
-|------|-----------|------|------|
-| 杜邦分析结果 | `dupont_result` | `DuPontResult` | 杜邦分析拆解结果 |
-| 趋势分析 | `trend_result` | `TrendResult` | 同比/环比趋势 |
-| 同比增长率 | `yoy_growth` | `Decimal` | Year-over-Year |
-| 环比增长率 | `qoq_growth` | `Decimal` | Quarter-over-Quarter |
-| 自由现金流 | `free_cash_flow` | `Decimal` | FCF = 经营现金流 - 资本支出 |
+| 中文         | 英文变量名         | 类型             | 说明                        |
+| ------------ | ------------------ | ---------------- | --------------------------- |
+| 杜邦分析结果 | `dupont_result`  | `DuPontResult` | 杜邦分析拆解结果            |
+| 趋势分析     | `trend_result`   | `TrendResult`  | 同比/环比趋势               |
+| 同比增长率   | `yoy_growth`     | `Decimal`      | Year-over-Year              |
+| 环比增长率   | `qoq_growth`     | `Decimal`      | Quarter-over-Quarter        |
+| 自由现金流   | `free_cash_flow` | `Decimal`      | FCF = 经营现金流 - 资本支出 |
 
 ---
 
@@ -248,54 +248,54 @@ class CashFlowStatement(BaseModel):
 
 ### 数据采集层 (`data_fetcher/`)
 
-| 类/函数 | 方法 | 输入 | 输出 | 被谁调用 |
-|---------|------|------|------|---------|
-| `AKShareClient` | `fetch_balance_sheet(stock_code: str)` | 股票代码 `str` | `List[BalanceSheet]` | `processor/`, `analyzer/` |
-| `AKShareClient` | `fetch_income_statement(stock_code: str)` | 股票代码 `str` | `List[IncomeStatement]` | `processor/`, `analyzer/` |
-| `AKShareClient` | `fetch_cashflow_statement(stock_code: str)` | 股票代码 `str` | `List[CashFlowStatement]` | `processor/`, `analyzer/` |
-| `AKShareClient` | `fetch_financial_indicators(stock_code: str)` | 股票代码 `str` | `Dict[str, Any]` | `analyzer/` |
-| `AKShareClient` | `fetch_stock_list()` | 无 | `List[StockInfo]` | `api/` |
-| `CacheManager` | [get(key: str)](file:///C:/Users/30847/Desktop/antigravity/%E6%8A%80%E6%9C%AF%E6%A0%88%E6%95%99%E5%AD%A6%E5%90%88%E8%AE%A1/A_Share_investment_Agent/src/tools/api.py#591-607) | 缓存键 `str` | `Optional[Any]` | 所有层 |
-| `CacheManager` | `set(key: str, value: Any, ttl: int)` | 键, 值, 过期秒数 | `None` | 所有层 |
+| 类/函数           | 方法                                                                                                                                                                       | 输入             | 输出                        | 被谁调用                      |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- | --------------------------- | ----------------------------- |
+| `AKShareClient` | `fetch_balance_sheet(stock_code: str)`                                                                                                                                   | 股票代码 `str` | `List[BalanceSheet]`      | `processor/`, `analyzer/` |
+| `AKShareClient` | `fetch_income_statement(stock_code: str)`                                                                                                                                | 股票代码 `str` | `List[IncomeStatement]`   | `processor/`, `analyzer/` |
+| `AKShareClient` | `fetch_cashflow_statement(stock_code: str)`                                                                                                                              | 股票代码 `str` | `List[CashFlowStatement]` | `processor/`, `analyzer/` |
+| `AKShareClient` | `fetch_financial_indicators(stock_code: str)`                                                                                                                            | 股票代码 `str` | `Dict[str, Any]`          | `analyzer/`                 |
+| `AKShareClient` | `fetch_stock_list()`                                                                                                                                                     | 无               | `List[StockInfo]`         | `api/`                      |
+| `CacheManager`  | [get(key: str)](file:///C:/Users/30847/Desktop/antigravity/%E6%8A%80%E6%9C%AF%E6%A0%88%E6%95%99%E5%AD%A6%E5%90%88%E8%AE%A1/A_Share_investment_Agent/src/tools/api.py#591-607) | 缓存键 `str`   | `Optional[Any]`           | 所有层                        |
+| `CacheManager`  | `set(key: str, value: Any, ttl: int)`                                                                                                                                    | 键, 值, 过期秒数 | `None`                    | 所有层                        |
 
 ### 数据处理层 (`processor/`)
 
-| 类/函数 | 方法 | 输入 | 输出 | 被谁调用 |
-|---------|------|------|------|---------|
-| `DataCleaner` | `clean_financial_data(df: pd.DataFrame)` | 原始 DataFrame | 清洗后 DataFrame | `analyzer/` |
-| `DataValidator` | `validate_amounts(data: BaseModel)` | pydantic 模型实例 | `ValidationResult` | 所有层 |
-| `DataTransformer` | `chinese_to_english(df: pd.DataFrame)` | 中文列名 DataFrame | 英文列名 DataFrame | `data_fetcher/` |
+| 类/函数             | 方法                                       | 输入               | 输出                 | 被谁调用          |
+| ------------------- | ------------------------------------------ | ------------------ | -------------------- | ----------------- |
+| `DataCleaner`     | `clean_financial_data(df: pd.DataFrame)` | 原始 DataFrame     | 清洗后 DataFrame     | `analyzer/`     |
+| `DataValidator`   | `validate_amounts(data: BaseModel)`      | pydantic 模型实例  | `ValidationResult` | 所有层            |
+| `DataTransformer` | `chinese_to_english(df: pd.DataFrame)`   | 中文列名 DataFrame | 英文列名 DataFrame   | `data_fetcher/` |
 
 ### 分析引擎层 (`analyzer/`)
 
-| 类/函数 | 方法 | 输入 | 输出 | 被谁调用 |
-|---------|------|------|------|---------|
-| `RatioCalculator` | `calc_profitability(bs, is_)` | 资产负债表, 利润表 | `ProfitabilityMetrics` | `api/`, `llm_engine/` |
-| `RatioCalculator` | `calc_solvency(bs)` | 资产负债表 | `SolvencyMetrics` | `api/`, `llm_engine/` |
-| `RatioCalculator` | `calc_efficiency(bs, is_)` | 资产负债表, 利润表 | `EfficiencyMetrics` | `api/`, `llm_engine/` |
-| `DuPontAnalyzer` | `analyze(bs, is_)` | 资产负债表, 利润表 | `DuPontResult` | `api/`, `llm_engine/` |
-| `CashFlowAnalyzer` | `analyze(cf, is_)` | 现金流量表, 利润表 | `CashFlowResult` | `api/`, `llm_engine/` |
-| `TrendAnalyzer` | `calc_yoy(current, previous)` | 当期, 同期 | `Decimal` | `api/` |
-| `PeerComparator` | `compare(stock_code, peer_codes)` | 目标代码, 对标代码列表 | `ComparisonResult` | `api/` |
+| 类/函数              | 方法                                | 输入                   | 输出                     | 被谁调用                  |
+| -------------------- | ----------------------------------- | ---------------------- | ------------------------ | ------------------------- |
+| `RatioCalculator`  | `calc_profitability(bs, is_)`     | 资产负债表, 利润表     | `ProfitabilityMetrics` | `api/`, `llm_engine/` |
+| `RatioCalculator`  | `calc_solvency(bs)`               | 资产负债表             | `SolvencyMetrics`      | `api/`, `llm_engine/` |
+| `RatioCalculator`  | `calc_efficiency(bs, is_)`        | 资产负债表, 利润表     | `EfficiencyMetrics`    | `api/`, `llm_engine/` |
+| `DuPontAnalyzer`   | `analyze(bs, is_)`                | 资产负债表, 利润表     | `DuPontResult`         | `api/`, `llm_engine/` |
+| `CashFlowAnalyzer` | `analyze(cf, is_)`                | 现金流量表, 利润表     | `CashFlowResult`       | `api/`, `llm_engine/` |
+| `TrendAnalyzer`    | `calc_yoy(current, previous)`     | 当期, 同期             | `Decimal`              | `api/`                  |
+| `PeerComparator`   | `compare(stock_code, peer_codes)` | 目标代码, 对标代码列表 | `ComparisonResult`     | `api/`                  |
 
 ### LLM 分析层 (`llm_engine/`)
 
-| 类/函数 | 方法 | 输入 | 输出 | 被谁调用 |
-|---------|------|------|------|---------|
-| `LLMClient` | `analyze(prompt: str)` | Prompt 文本 | `str`（分析文本） | `ReportGenerator` |
-| `ReportGenerator` | `generate_report(stock_code, all_metrics)` | 代码, 全部指标 | `AnalysisReport` | `api/` |
+| 类/函数             | 方法                                         | 输入           | 输出                | 被谁调用            |
+| ------------------- | -------------------------------------------- | -------------- | ------------------- | ------------------- |
+| `LLMClient`       | `analyze(prompt: str)`                     | Prompt 文本    | `str`（分析文本） | `ReportGenerator` |
+| `ReportGenerator` | `generate_report(stock_code, all_metrics)` | 代码, 全部指标 | `AnalysisReport`  | `api/`            |
 
 ### API 层 (`api/`)
 
-| 路由 | 方法 | 输入 | 输出 |
-|------|------|------|------|
-| `GET /api/stocks` | 获取股票列表 | 查询参数 | `List[StockInfo]` |
-| `GET /api/stocks/{code}/statements` | 获取三大报表 | 股票代码 | 三大报表数据 |
-| `GET /api/stocks/{code}/ratios` | 获取财务比率 | 股票代码 | 全部比率指标 |
-| `GET /api/stocks/{code}/dupont` | 杜邦分析 | 股票代码 | `DuPontResult` |
-| `GET /api/stocks/{code}/trend` | 趋势分析 | 股票代码 + 年份范围 | `TrendResult` |
-| `POST /api/stocks/{code}/ai-report` | AI 分析报告 | 股票代码 + 分析深度 | `AnalysisReport` |
-| `GET /api/stocks/{code}/export/excel` | 导出 Excel | 股票代码 | `.xlsx` 文件流 |
+| 路由                                    | 方法         | 输入                | 输出                |
+| --------------------------------------- | ------------ | ------------------- | ------------------- |
+| `GET /api/stocks`                     | 获取股票列表 | 查询参数            | `List[StockInfo]` |
+| `GET /api/stocks/{code}/statements`   | 获取三大报表 | 股票代码            | 三大报表数据        |
+| `GET /api/stocks/{code}/ratios`       | 获取财务比率 | 股票代码            | 全部比率指标        |
+| `GET /api/stocks/{code}/dupont`       | 杜邦分析     | 股票代码            | `DuPontResult`    |
+| `GET /api/stocks/{code}/trend`        | 趋势分析     | 股票代码 + 年份范围 | `TrendResult`     |
+| `POST /api/stocks/{code}/ai-report`   | AI 分析报告  | 股票代码 + 分析深度 | `AnalysisReport`  |
+| `GET /api/stocks/{code}/export/excel` | 导出 Excel   | 股票代码            | `.xlsx` 文件流    |
 
 ---
 
@@ -306,26 +306,26 @@ class CashFlowStatement(BaseModel):
 
 ### 你需要准备的
 
-| 项目 | 是否必须 | 说明 |
-|------|---------|------|
-| **AKShare** | ✅ 必须 | `pip install akshare`，无需 API Key |
-| **LLM API Key** | ✅ 必须 | **DeepSeek API**（已确认）`https://api.deepseek.com` |
-| **MySQL** | ✅ 必须 | 本机安装或 Docker 部署 |
-| **Redis** | ⚡ 推荐 | 缓存层，Docker 一行部署：`docker run -d -p 6379:6379 redis` |
-| **Cookie** | ❌ 不需要 | AKShare 自动处理，无需手动抓 Cookie |
+| 项目                  | 是否必须  | 说明                                                          |
+| --------------------- | --------- | ------------------------------------------------------------- |
+| **AKShare**     | ✅ 必须   | `pip install akshare`，无需 API Key                         |
+| **LLM API Key** | ✅ 必须   | **DeepSeek API**（已确认）`https://api.deepseek.com`  |
+| **MySQL**       | ✅ 必须   | 本机安装或 Docker 部署                                        |
+| **Redis**       | ⚡ 推荐   | 缓存层，Docker 一行部署：`docker run -d -p 6379:6379 redis` |
+| **Cookie**      | ❌ 不需要 | AKShare 自动处理，无需手动抓 Cookie                           |
 
 ### 全部中国信息源（第 7 条要求）
 
-| 数据类型 | 来源 | AKShare 接口 |
-|---------|------|-------------|
+| 数据类型   | 来源     | AKShare 接口                                                |
+| ---------- | -------- | ----------------------------------------------------------- |
 | 资产负债表 | 新浪财经 | `stock_financial_report_sina(stock, symbol="资产负债表")` |
-| 利润表 | 新浪财经 | `stock_financial_report_sina(stock, symbol="利润表")` |
+| 利润表     | 新浪财经 | `stock_financial_report_sina(stock, symbol="利润表")`     |
 | 现金流量表 | 新浪财经 | `stock_financial_report_sina(stock, symbol="现金流量表")` |
-| 财务指标 | 新浪财经 | `stock_financial_analysis_indicator(symbol)` |
-| 实时行情 | 东方财富 | `stock_zh_a_spot_em()` |
-| 历史行情 | 东方财富 | `stock_zh_a_hist(symbol)` |
-| 股票列表 | 东方财富 | `stock_zh_a_spot_em()` 列表 |
-| 行业分类 | 东方财富 | `stock_board_industry_name_em()` |
+| 财务指标   | 新浪财经 | `stock_financial_analysis_indicator(symbol)`              |
+| 实时行情   | 东方财富 | `stock_zh_a_spot_em()`                                    |
+| 历史行情   | 东方财富 | `stock_zh_a_hist(symbol)`                                 |
+| 股票列表   | 东方财富 | `stock_zh_a_spot_em()` 列表                               |
+| 行业分类   | 东方财富 | `stock_board_industry_name_em()`                          |
 
 > 全部走国内 CDN，不受 VPN/IP 影响 ✅
 
@@ -481,6 +481,7 @@ poetry run pytest tests/ -v
 
 > [!NOTE]
 > **已确认的技术选型**：
+>
 > - ✅ 前端：**React** + Tailwind CSS
 > - ✅ LLM：**DeepSeek**（国内 API，`https://api.deepseek.com`）
 > - ✅ 数据库：**MySQL**（本机已安装）
@@ -490,6 +491,7 @@ poetry run pytest tests/ -v
 ## 规范文档清单
 
 以下文档已就绪：
+
 - ✅ [变量命名对照表](file:///C:/Users/30847/Desktop/antigravity/financial-report-analyzer/docs/variable_naming_table.md)
 - ✅ [类/方法标准表](file:///C:/Users/30847/Desktop/antigravity/financial-report-analyzer/docs/class_method_reference.md)
 - ✅ [MySQL 使用指南](file:///C:/Users/30847/Desktop/antigravity/financial-report-analyzer/docs/mysql_guide.md)

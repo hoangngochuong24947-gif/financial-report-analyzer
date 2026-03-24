@@ -46,7 +46,7 @@ cp .env.example .env
 poetry run uvicorn src.main:app --reload
 ```
 
-访问 http://localhost:8000/docs 查看API文档
+访问 <http://localhost:8000/docs> 查看API文档
 
 ## 项目结构
 

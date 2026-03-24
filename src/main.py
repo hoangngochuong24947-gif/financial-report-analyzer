@@ -19,7 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from src.config.settings import settings
 from src.utils.logger import setup_logger, logger
-from src.api import routes_stock, routes_analysis
+from src.api import routes_stock, routes_analysis, routes_report
 
 # 初始化日志
 setup_logger(log_level=settings.log_level)
@@ -45,6 +45,7 @@ app.add_middleware(
 # 注册路由
 app.include_router(routes_stock.router)
 app.include_router(routes_analysis.router)
+app.include_router(routes_report.router)
 
 
 @app.on_event("startup")
