@@ -13,7 +13,16 @@
 ====================================================================
 """
 
-from langchain_core.prompts import PromptTemplate
+try:
+    from langchain_core.prompts import PromptTemplate
+except Exception:  # pragma: no cover - optional dependency fallback
+    class PromptTemplate:  # type: ignore
+        def __init__(self, input_variables, template):
+            self.input_variables = input_variables
+            self.template = template
+
+        def format(self, **kwargs):
+            return self.template.format(**kwargs)
 
 
 # ============================================================

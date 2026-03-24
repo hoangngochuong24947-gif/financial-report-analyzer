@@ -16,16 +16,20 @@
 ====================================================================
 """
 
-from typing import List, Dict, Any
-from decimal import Decimal
+from typing import List, Dict, Any, Optional
 
 from src.models.analysis_result import ComparisonResult
-from src.data_fetcher.akshare_client import AKShareClient
+from src.crawler.interfaces import FinancialDataGateway
+from src.crawler.service import CrawlerService
 from src.analyzer.ratio_calculator import calc_profitability, calc_solvency, calc_efficiency
 from src.utils.logger import logger
 
 
-def compare(target_code: str, peer_codes: List[str]) -> ComparisonResult:
+def compare(
+    target_code: str,
+    peer_codes: List[str],
+    gateway: Optional[FinancialDataGateway] = None,
+) -> ComparisonResult:
     """
     同行业对比分析
 
@@ -40,7 +44,7 @@ def compare(target_code: str, peer_codes: List[str]) -> ComparisonResult:
         >>> result = compare("600519", ["000858", "600809"])
         >>> result.ranking["roe"]  # ROE 排名
     """
-    client = AKShareClient()
+    client = gateway or CrawlerService()
 
     # 收集所有股票的指标
     all_metrics: Dict[str, Dict[str, Any]] = {}

@@ -17,8 +17,15 @@
 ====================================================================
 """
 
-from langchain_openai import ChatOpenAI
-from langchain_core.messages import HumanMessage, SystemMessage
+from typing import Any, List
+
+try:
+    from langchain_openai import ChatOpenAI
+    from langchain_core.messages import HumanMessage, SystemMessage
+except Exception:  # pragma: no cover - optional dependency fallback
+    ChatOpenAI = None  # type: ignore
+    HumanMessage = None  # type: ignore
+    SystemMessage = None  # type: ignore
 
 from src.config.settings import settings
 from src.utils.logger import logger
@@ -40,6 +47,12 @@ class LLMClient:
         - deepseek_api_base: API 地址（https://api.deepseek.com）
         - deepseek_model: 模型名称（deepseek-chat）
         """
+        if ChatOpenAI is None:
+            raise RuntimeError(
+                "langchain-openai/langchain-core are required for LLM features. "
+                "Install dependencies: poetry add langchain-openai langchain-core"
+            )
+
         if not settings.deepseek_api_key:
             logger.warning("DEEPSEEK_API_KEY is not set. LLM features will be unavailable.")
 
@@ -79,7 +92,7 @@ class LLMClient:
                 "DEEPSEEK_API_KEY 未配置。请在 .env 文件中设置 DEEPSEEK_API_KEY。"
             )
 
-        messages = []
+        messages: List[Any] = []
         if system_prompt:
             messages.append(SystemMessage(content=system_prompt))
         messages.append(HumanMessage(content=prompt))

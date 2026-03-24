@@ -25,11 +25,12 @@
 import re
 from typing import Dict, Any, Optional
 
-from src.data_fetcher.akshare_client import AKShareClient
 from src.analyzer.ratio_calculator import calc_profitability, calc_solvency, calc_efficiency
 from src.analyzer.dupont_analyzer import analyze as dupont_analyze
 from src.analyzer.cashflow_analyzer import analyze as cashflow_analyze
 from src.analyzer.trend_analyzer import calc_yoy
+from src.crawler.interfaces import FinancialDataGateway
+from src.crawler.service import CrawlerService
 from src.models.analysis_result import AnalysisReport
 from src.llm_engine.llm_client import get_llm_client
 from src.llm_engine.prompt_templates import (
@@ -52,12 +53,12 @@ class ReportGenerator:
     5. 解析 LLM 回复，填充 AnalysisReport 模型
     """
 
-    def __init__(self, client: Optional[AKShareClient] = None):
+    def __init__(self, client: Optional[FinancialDataGateway] = None):
         """
         Args:
             client: AKShare 客户端实例（可选，默认新建）
         """
-        self._client = client or AKShareClient()
+        self._client = client or CrawlerService()
 
     def generate_report(self, stock_code: str, stock_name: str = "") -> AnalysisReport:
         """
