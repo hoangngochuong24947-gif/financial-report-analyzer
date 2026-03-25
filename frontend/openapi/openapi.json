@@ -1,0 +1,991 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Financial Report Analyzer",
+    "description": "A-share financial report analysis service",
+    "version": "0.2.0"
+  },
+  "paths": {
+    "/api/stocks/": {
+      "get": {
+        "tags": [
+          "stocks"
+        ],
+        "summary": "Get Stock List",
+        "operationId": "get_stock_list_api_stocks__get",
+        "parameters": [
+          {
+            "name": "market",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Market filter",
+              "title": "Market"
+            },
+            "description": "Market filter"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/StockInfo"
+                  },
+                  "title": "Response Get Stock List Api Stocks  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stocks/{code}/statements": {
+      "get": {
+        "tags": [
+          "stocks"
+        ],
+        "summary": "Get Financial Statements",
+        "operationId": "get_financial_statements_api_stocks__code__statements_get",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Code"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stocks/{code}/ratios": {
+      "get": {
+        "tags": [
+          "analysis"
+        ],
+        "summary": "Get Financial Ratios",
+        "operationId": "get_financial_ratios_api_stocks__code__ratios_get",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Code"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stocks/{code}/dupont": {
+      "get": {
+        "tags": [
+          "analysis"
+        ],
+        "summary": "Get Dupont Analysis",
+        "operationId": "get_dupont_analysis_api_stocks__code__dupont_get",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Code"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DuPontResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stocks/{code}/cashflow": {
+      "get": {
+        "tags": [
+          "analysis"
+        ],
+        "summary": "Get Cashflow Analysis",
+        "operationId": "get_cashflow_analysis_api_stocks__code__cashflow_get",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Code"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CashFlowResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stocks/{code}/trend": {
+      "get": {
+        "tags": [
+          "analysis"
+        ],
+        "summary": "Get Trend Analysis",
+        "operationId": "get_trend_analysis_api_stocks__code__trend_get",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Code"
+            }
+          },
+          {
+            "name": "metric",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Metric field name on income statements",
+              "default": "net_income",
+              "title": "Metric"
+            },
+            "description": "Metric field name on income statements"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stocks/{code}/ai-report": {
+      "post": {
+        "tags": [
+          "report"
+        ],
+        "summary": "Generate Ai Report",
+        "operationId": "generate_ai_report_api_stocks__code__ai_report_post",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Code"
+            }
+          },
+          {
+            "name": "stock_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Stock Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalysisReport"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stocks/{code}/export/excel": {
+      "get": {
+        "tags": [
+          "report"
+        ],
+        "summary": "Export Excel Report",
+        "operationId": "export_excel_report_api_stocks__code__export_excel_get",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Code"
+            }
+          },
+          {
+            "name": "stock_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Stock Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/stocks": {
+      "get": {
+        "tags": [
+          "v2"
+        ],
+        "summary": "List Stocks V2",
+        "operationId": "list_stocks_v2_api_v2_stocks_get",
+        "parameters": [
+          {
+            "name": "market",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Market filter",
+              "title": "Market"
+            },
+            "description": "Market filter"
+          },
+          {
+            "name": "refresh",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Force refresh stock list cache",
+              "default": false,
+              "title": "Refresh"
+            },
+            "description": "Force refresh stock list cache"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/StockInfo"
+                  },
+                  "title": "Response List Stocks V2 Api V2 Stocks Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/stocks/{code}/snapshot": {
+      "get": {
+        "tags": [
+          "v2"
+        ],
+        "summary": "Get Stock Snapshot V2",
+        "operationId": "get_stock_snapshot_v2_api_v2_stocks__code__snapshot_get",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Code"
+            }
+          },
+          {
+            "name": "latest_only",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Only return latest statement period",
+              "default": true,
+              "title": "Latest Only"
+            },
+            "description": "Only return latest statement period"
+          },
+          {
+            "name": "refresh",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Force refresh from upstream",
+              "default": false,
+              "title": "Refresh"
+            },
+            "description": "Force refresh from upstream"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/crawler/jobs": {
+      "post": {
+        "tags": [
+          "v2"
+        ],
+        "summary": "Create Crawl Job",
+        "operationId": "create_crawl_job_api_v2_crawler_jobs_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrawlJobRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrawlJobResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/crawler/jobs/{job_id}": {
+      "get": {
+        "tags": [
+          "v2"
+        ],
+        "summary": "Get Crawl Job",
+        "operationId": "get_crawl_job_api_v2_crawler_jobs__job_id__get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Crawl Job Api V2 Crawler Jobs  Job Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/": {
+      "get": {
+        "summary": "Root",
+        "operationId": "root__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health Check",
+        "operationId": "health_check_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AnalysisReport": {
+        "properties": {
+          "stock_code": {
+            "type": "string",
+            "title": "Stock Code",
+            "description": "股票代码"
+          },
+          "stock_name": {
+            "type": "string",
+            "title": "Stock Name",
+            "description": "股票名称"
+          },
+          "report_date": {
+            "type": "string",
+            "title": "Report Date",
+            "description": "报告日期"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At",
+            "description": "生成时间"
+          },
+          "executive_summary": {
+            "type": "string",
+            "title": "Executive Summary",
+            "description": "执行摘要 / Executive Summary"
+          },
+          "profitability_analysis": {
+            "type": "string",
+            "title": "Profitability Analysis",
+            "description": "盈利能力分析"
+          },
+          "solvency_analysis": {
+            "type": "string",
+            "title": "Solvency Analysis",
+            "description": "偿债能力分析"
+          },
+          "efficiency_analysis": {
+            "type": "string",
+            "title": "Efficiency Analysis",
+            "description": "运营效率分析"
+          },
+          "cashflow_analysis": {
+            "type": "string",
+            "title": "Cashflow Analysis",
+            "description": "现金流分析"
+          },
+          "trend_analysis": {
+            "type": "string",
+            "title": "Trend Analysis",
+            "description": "趋势分析"
+          },
+          "strengths": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Strengths",
+            "description": "优势 / Strengths"
+          },
+          "weaknesses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Weaknesses",
+            "description": "劣势 / Weaknesses"
+          },
+          "recommendations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Recommendations",
+            "description": "建议 / Recommendations"
+          },
+          "risk_warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Risk Warnings",
+            "description": "风险提示 / Risk Warnings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "stock_code",
+          "stock_name",
+          "report_date",
+          "executive_summary",
+          "profitability_analysis",
+          "solvency_analysis",
+          "efficiency_analysis",
+          "cashflow_analysis",
+          "trend_analysis"
+        ],
+        "title": "AnalysisReport",
+        "description": "AI 生成的综合分析报告 / AI-Generated Analysis Report",
+        "example": {
+          "executive_summary": "该公司财务状况良好...",
+          "recommendations": [
+            "关注市场份额变化"
+          ],
+          "report_date": "2023-12-31",
+          "stock_code": "600519",
+          "stock_name": "贵州茅台",
+          "strengths": [
+            "盈利能力强",
+            "现金流充沛"
+          ],
+          "weaknesses": [
+            "资产周转率偏低"
+          ]
+        }
+      },
+      "CashFlowResult": {
+        "properties": {
+          "operating_cashflow": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Operating Cashflow",
+            "description": "经营活动现金流量净额"
+          },
+          "free_cash_flow": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Free Cash Flow",
+            "description": "自由现金流 / Free Cash Flow"
+          },
+          "cash_to_profit_ratio": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Cash To Profit Ratio",
+            "description": "现金流量与净利润比率"
+          },
+          "operating_cash_coverage": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Operating Cash Coverage",
+            "description": "经营现金流覆盖率"
+          }
+        },
+        "type": "object",
+        "required": [
+          "operating_cashflow",
+          "free_cash_flow",
+          "cash_to_profit_ratio",
+          "operating_cash_coverage"
+        ],
+        "title": "CashFlowResult",
+        "description": "现金流分析结果 / Cash Flow Analysis Result"
+      },
+      "CrawlJobRequest": {
+        "properties": {
+          "stock_code": {
+            "type": "string",
+            "title": "Stock Code",
+            "description": "Target stock code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "stock_code"
+        ],
+        "title": "CrawlJobRequest"
+      },
+      "CrawlJobResponse": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "title": "Job Id"
+          },
+          "stock_code": {
+            "type": "string",
+            "title": "Stock Code"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "stock_code",
+          "status",
+          "created_at"
+        ],
+        "title": "CrawlJobResponse"
+      },
+      "DuPontResult": {
+        "properties": {
+          "roe": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Roe",
+            "description": "净资产收益率 / ROE"
+          },
+          "net_profit_margin": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Net Profit Margin",
+            "description": "销售净利率 / Net Profit Margin"
+          },
+          "asset_turnover": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Asset Turnover",
+            "description": "总资产周转率 / Asset Turnover"
+          },
+          "equity_multiplier": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Equity Multiplier",
+            "description": "权益乘数 / Equity Multiplier"
+          }
+        },
+        "type": "object",
+        "required": [
+          "roe",
+          "net_profit_margin",
+          "asset_turnover",
+          "equity_multiplier"
+        ],
+        "title": "DuPontResult",
+        "description": "杜邦分析结果 / DuPont Analysis Result\n\nROE = 销售净利率 × 总资产周转率 × 权益乘数",
+        "example": {
+          "asset_turnover": "0.5000",
+          "equity_multiplier": "1.0000",
+          "net_profit_margin": "0.3000",
+          "roe": "0.1500"
+        }
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "StockInfo": {
+        "properties": {
+          "stock_code": {
+            "type": "string",
+            "title": "Stock Code",
+            "description": "股票代码 / Stock Code"
+          },
+          "stock_name": {
+            "type": "string",
+            "title": "Stock Name",
+            "description": "股票名称 / Stock Name"
+          },
+          "industry": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Industry",
+            "description": "所属行业 / Industry"
+          },
+          "market": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Market",
+            "description": "市场类型 / Market (主板/创业板/科创板)"
+          },
+          "list_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "List Date",
+            "description": "上市日期 / Listing Date"
+          }
+        },
+        "type": "object",
+        "required": [
+          "stock_code",
+          "stock_name"
+        ],
+        "title": "StockInfo",
+        "description": "股票基础信息模型",
+        "example": {
+          "industry": "白酒",
+          "list_date": "2001-08-27",
+          "market": "主板",
+          "stock_code": "600519",
+          "stock_name": "贵州茅台"
+        }
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

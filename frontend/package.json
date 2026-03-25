@@ -1,0 +1,31 @@
+{
+  "name": "financial-report-analyzer-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "gen:openapi": "python ../scripts/export_openapi.py --output ./openapi/openapi.json",
+    "gen:types": "openapi-typescript ./openapi/openapi.json --output ./src/api/generated/schema.ts",
+    "gen:api": "npm run gen:openapi && npm run gen:types",
+    "check:api": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.83.0",
+    "openapi-fetch": "^0.14.0"
+    ,
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.23",
+    "@types/react-dom": "^18.3.7",
+    "@vitejs/plugin-react": "^4.7.0",
+    "@types/node": "^22.16.5",
+    "openapi-typescript": "^7.8.0",
+    "typescript": "^5.8.3",
+    "vite": "^7.0.4"
+  }
+}
