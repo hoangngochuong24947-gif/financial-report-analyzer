@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 from typing import Any, Dict, List, Optional, Protocol
 
 from src.models.financial_statements import (
@@ -23,10 +24,19 @@ class CrawlerDependencyError(CrawlerError):
     """Raised when optional crawler dependencies are unavailable."""
 
 
+class Dataset(str, Enum):
+    """Supported financial datasets."""
+
+    INCOME_STATEMENT = "income_statement"
+    BALANCE_SHEET = "balance_sheet"
+    CASHFLOW_STATEMENT = "cashflow_statement"
+    FINANCIAL_INDICATORS = "financial_indicators"
+
+
 class FinancialDataGateway(Protocol):
     """Abstraction for financial data providers."""
 
-    def fetch_stock_list(self, market: Optional[str] = None) -> List[StockInfo]:
+    def fetch_stock_list(self, market: Optional[str] = None, refresh: bool = False) -> List[StockInfo]:
         ...
 
     def fetch_balance_sheet(self, stock_code: str, refresh: bool = False) -> List[BalanceSheet]:
@@ -54,4 +64,3 @@ class FinancialSnapshot:
     balance_sheets: List[BalanceSheet]
     income_statements: List[IncomeStatement]
     cashflow_statements: List[CashFlowStatement]
-

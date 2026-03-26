@@ -5,10 +5,13 @@ from typing import Any, Dict, List, Optional
 
 from src.crawler.interfaces import (
     CrawlerDataNotFoundError,
+    Dataset,
     FinancialDataGateway,
     FinancialSnapshot,
 )
 from src.crawler.providers.akshare_provider import AKShareProvider
+from src.crawler.providers.baidu_finance_provider import BaiduFinanceProvider
+from src.config.settings import settings
 from src.models.financial_statements import (
     BalanceSheet,
     CashFlowStatement,
@@ -27,10 +30,16 @@ class CrawlerService:
     """
 
     def __init__(self, provider: Optional[FinancialDataGateway] = None):
-        self._provider = provider or AKShareProvider()
+        self._provider = provider or self._build_default_provider()
 
-    def fetch_stock_list(self, market: Optional[str] = None) -> List[StockInfo]:
-        return self._provider.fetch_stock_list(market=market)
+    @staticmethod
+    def _build_default_provider() -> FinancialDataGateway:
+        if settings.financial_provider.lower() == "baidu_finance":
+            return BaiduFinanceProvider()
+        return AKShareProvider()
+
+    def fetch_stock_list(self, market: Optional[str] = None, refresh: bool = False) -> List[StockInfo]:
+        return self._provider.fetch_stock_list(market=market, refresh=refresh)
 
     def fetch_balance_sheet(self, stock_code: str, refresh: bool = False) -> List[BalanceSheet]:
         return self._provider.fetch_balance_sheet(stock_code, refresh=refresh)
@@ -67,6 +76,16 @@ class CrawlerService:
         logger.info(f"Refreshing snapshot for {stock_code}")
         return self.get_snapshot(stock_code, refresh=True)
 
+    def list_archives(
+        self,
+        stock_code: Optional[str] = None,
+        dataset: Optional[Dataset] = None,
+        limit: int = 20,
+    ) -> List[Dict[str, Any]]:
+        if hasattr(self._provider, "list_archives"):
+            return self._provider.list_archives(stock_code=stock_code, dataset=dataset, limit=limit)
+        return []
+
     @staticmethod
     def to_snapshot_payload(snapshot: FinancialSnapshot, latest_only: bool = True) -> Dict[str, Any]:
         def _pick(data: list):
@@ -81,4 +100,3 @@ class CrawlerService:
                 "cashflow_statement": [item.model_dump(mode="json") for item in _pick(snapshot.cashflow_statements)],
             },
         }
-

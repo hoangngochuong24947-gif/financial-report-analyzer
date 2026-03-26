@@ -49,8 +49,10 @@ class AKShareProvider(FinancialDataGateway):
     def _invalidate_stock_list_cache(market: Optional[str]) -> None:
         cache_manager.delete(f"stock_list:{market or 'all'}")
 
-    def fetch_stock_list(self, market: Optional[str] = None) -> List[StockInfo]:
-        return fetch_stock_list(market=market)
+    def fetch_stock_list(self, market: Optional[str] = None, refresh: bool = False) -> List[StockInfo]:
+        if refresh:
+            self._invalidate_stock_list_cache(market)
+        return fetch_stock_list(market=market, refresh=refresh)
 
     @retry(
         stop=stop_after_attempt(3),
@@ -99,4 +101,3 @@ class AKShareProvider(FinancialDataGateway):
         if refresh:
             self._invalidate_stock_cache(stock_code)
         return AKShareClient.fetch_financial_indicators(stock_code, raise_on_error=True)
-

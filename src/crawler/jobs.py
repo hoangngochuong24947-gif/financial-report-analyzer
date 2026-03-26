@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Dict
+from uuid import uuid4
 
 from src.config.settings import settings
 from src.crawler.interfaces import CrawlerDependencyError
@@ -16,9 +18,15 @@ except Exception:  # pragma: no cover - optional dependency fallback
     Queue = None  # type: ignore
     Job = None  # type: ignore
 
+LOCAL_JOB_STORE: Dict[str, Dict[str, Any]] = {}
+
+
+def has_queue_dependencies() -> bool:
+    return not (redis is None or Queue is None or Job is None)
+
 
 def _ensure_queue_dependencies() -> None:
-    if redis is None or Queue is None or Job is None:
+    if not has_queue_dependencies():
         raise CrawlerDependencyError("rq/redis package is not available")
 
 
@@ -46,7 +54,34 @@ def enqueue_refresh_snapshot(stock_code: str) -> str:
     return str(job.id)
 
 
+def enqueue_local_refresh_snapshot(stock_code: str) -> str:
+    job_id = f"sync-{uuid4().hex[:12]}"
+    created_at = datetime.utcnow().isoformat() + "Z"
+    try:
+        result = run_refresh_snapshot(stock_code)
+        payload = {
+            "job_id": job_id,
+            "status": "finished",
+            "result": result,
+            "error": None,
+            "created_at": created_at,
+        }
+    except Exception as e:
+        payload = {
+            "job_id": job_id,
+            "status": "failed",
+            "result": None,
+            "error": str(e),
+            "created_at": created_at,
+        }
+    LOCAL_JOB_STORE[job_id] = payload
+    return job_id
+
+
 def get_job_status(job_id: str) -> Dict[str, Any]:
+    if job_id in LOCAL_JOB_STORE:
+        return LOCAL_JOB_STORE[job_id]
+
     _ensure_queue_dependencies()
     queue = _get_queue()
     job = Job.fetch(job_id, connection=queue.connection)
@@ -57,4 +92,3 @@ def get_job_status(job_id: str) -> Dict[str, Any]:
         "result": job.result if status == "finished" else None,
         "error": str(job.exc_info) if status == "failed" else None,
     }
-

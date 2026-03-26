@@ -37,6 +37,8 @@ async def startup_event() -> None:
     logger.info("Financial Report Analyzer Starting...")
     logger.info(f"API Host: {settings.api_host}:{settings.api_port}")
     logger.info(f"Log Level: {settings.log_level}")
+    logger.info(f"Financial Provider: {settings.financial_provider}")
+    logger.info(f"Archive Root: {settings.archive_root}")
     logger.info(f"Redis: {settings.redis_host}:{settings.redis_port}")
     logger.info("=" * 60)
 
@@ -62,4 +64,3 @@ async def health_check():
         "status": "healthy",
         "service": "financial-report-analyzer",
     }
-

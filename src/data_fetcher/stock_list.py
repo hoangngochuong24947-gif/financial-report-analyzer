@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import List, Optional
 
 import akshare as ak
+import pandas as pd
 
 from src.data_fetcher.cache_manager import cache_manager
 from src.models.stock_info import StockInfo
@@ -34,27 +35,76 @@ def _fallback_stock_list(market: Optional[str]) -> List[StockInfo]:
     return data
 
 
-def fetch_stock_list(market: Optional[str] = None) -> List[StockInfo]:
+def _normalize_stock_df(df: pd.DataFrame) -> Optional[pd.DataFrame]:
+    if df.empty:
+        return None
+
+    if {"代码", "名称"}.issubset(set(df.columns)):
+        normalized = df[["代码", "名称"]].copy()
+        normalized.columns = ["stock_code", "stock_name"]
+        return normalized
+
+    if {"code", "name"}.issubset(set(df.columns)):
+        normalized = df[["code", "name"]].copy()
+        normalized.columns = ["stock_code", "stock_name"]
+        return normalized
+
+    return None
+
+
+def _fetch_stock_list_from_secondary() -> Optional[pd.DataFrame]:
+    # Fallback chain:
+    # 1) stock_zh_a_spot (works in environments where *_em endpoint may be blocked)
+    # 2) stock_info_a_code_name
+    try:
+        logger.info("Fetching stock list from AKShare secondary endpoint: stock_zh_a_spot")
+        df = ak.stock_zh_a_spot()
+        normalized = _normalize_stock_df(df)
+        if normalized is not None:
+            return normalized
+    except Exception as e:
+        logger.warning(f"Secondary endpoint stock_zh_a_spot failed: {e}")
+
+    try:
+        logger.info("Fetching stock list from AKShare tertiary endpoint: stock_info_a_code_name")
+        df = ak.stock_info_a_code_name()
+        normalized = _normalize_stock_df(df)
+        if normalized is not None:
+            return normalized
+    except Exception as e:
+        logger.warning(f"Tertiary endpoint stock_info_a_code_name failed: {e}")
+
+    return None
+
+
+def fetch_stock_list(market: Optional[str] = None, refresh: bool = False) -> List[StockInfo]:
     cache_key = f"stock_list:{market or 'all'}"
 
-    cached = cache_manager.get(cache_key)
-    if cached:
-        logger.info(f"Stock list loaded from cache: {len(cached)} stocks")
-        return [StockInfo(**item) for item in cached]
+    if refresh:
+        cache_manager.delete(cache_key)
+    else:
+        cached = cache_manager.get(cache_key)
+        if cached:
+            logger.info(f"Stock list loaded from cache: {len(cached)} stocks")
+            return [StockInfo(**item) for item in cached]
 
     try:
         logger.info("Fetching stock list from AKShare...")
         df = ak.stock_zh_a_spot_em()
+        normalized = _normalize_stock_df(df)
+        if normalized is None:
+            logger.warning("Primary stock list payload is empty or missing required columns")
+            normalized = _fetch_stock_list_from_secondary()
+            if normalized is None:
+                fallback = _fallback_stock_list(market)
+                cache_manager.set(
+                    cache_key,
+                    [stock.model_dump(mode="json") for stock in fallback],
+                    ttl=300,
+                )
+                return fallback
+        df = normalized
 
-        required_columns = {"代码", "名称"}
-        if df.empty or not required_columns.issubset(set(df.columns)):
-            logger.warning("AKShare stock list payload is empty or missing required columns")
-            fallback = _fallback_stock_list(market)
-            cache_manager.set(cache_key, [stock.model_dump(mode="json") for stock in fallback], ttl=3600)
-            return fallback
-
-        df = df[["代码", "名称"]].copy()
-        df.columns = ["stock_code", "stock_name"]
         df["market"] = df["stock_code"].apply(_get_market_from_code)
 
         if market:
@@ -84,6 +134,33 @@ def fetch_stock_list(market: Optional[str] = None) -> List[StockInfo]:
 
     except Exception as e:
         logger.error(f"Failed to fetch stock list: {e}")
+        df2 = _fetch_stock_list_from_secondary()
+        if df2 is not None:
+            df2["market"] = df2["stock_code"].apply(_get_market_from_code)
+            if market:
+                df2 = df2[df2["market"] == market]
+
+            stock_list = [
+                StockInfo(
+                    stock_code=row["stock_code"],
+                    stock_name=row["stock_name"],
+                    market=row["market"],
+                )
+                for _, row in df2.iterrows()
+            ]
+            if stock_list:
+                cache_manager.set(
+                    cache_key,
+                    [stock.model_dump(mode="json") for stock in stock_list],
+                    ttl=3600,
+                )
+                logger.info(f"Fetched {len(stock_list)} stocks via secondary chain")
+                return stock_list
+
         fallback = _fallback_stock_list(market)
-        cache_manager.set(cache_key, [stock.model_dump(mode="json") for stock in fallback], ttl=3600)
+        cache_manager.set(
+            cache_key,
+            [stock.model_dump(mode="json") for stock in fallback],
+            ttl=300,
+        )
         return fallback
