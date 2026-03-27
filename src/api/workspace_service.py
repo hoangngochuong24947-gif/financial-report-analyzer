@@ -44,11 +44,19 @@ class WorkspaceService:
 
     def get_metric_bundle(self, stock_code: str) -> WorkspaceMetricBundle:
         workspace = self.get_workspace(stock_code)
-        return self._metric_engine.build_bundle(snapshot=workspace.snapshot, stock_name=workspace.stock_name)
+        return self._metric_engine.build_bundle(
+            snapshot=workspace.snapshot,
+            stock_name=workspace.stock_name,
+            indicator_snapshot=workspace.indicator_snapshot,
+        )
 
     def get_context(self, stock_code: str, profile_key: str = "archive_review") -> AiContextResponse:
         workspace = self.get_workspace(stock_code)
-        bundle = self._metric_engine.build_bundle(snapshot=workspace.snapshot, stock_name=workspace.stock_name)
+        bundle = self._metric_engine.build_bundle(
+            snapshot=workspace.snapshot,
+            stock_name=workspace.stock_name,
+            indicator_snapshot=workspace.indicator_snapshot,
+        )
         return self._context_builder.build(workspace=workspace, metric_bundle=bundle, profile_key=profile_key)
 
     def get_snapshot_response(self, stock_code: str) -> SnapshotResponse:

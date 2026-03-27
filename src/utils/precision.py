@@ -1,82 +1,64 @@
 """
-====================================================================
-模块名称：precision.py
-模块功能：金额和比率精度控制工具
-
-【函数接口总览】
-┌─────────────────────────────┬────────────────────────────┬─────────────────────────┐
-│ 函数名                       │ 输入                        │ 输出                     │
-├─────────────────────────────┼────────────────────────────┼─────────────────────────┤
-│ to_amount()                  │ value: Any                  │ Decimal                  │
-├─────────────────────────────┼────────────────────────────┼─────────────────────────┤
-│ to_ratio()                   │ value: Any                  │ Decimal                  │
-├─────────────────────────────┼────────────────────────────┼─────────────────────────┤
-│ safe_divide()                │ numerator: Decimal,         │ Decimal                  │
-│                              │ denominator: Decimal        │                          │
-└─────────────────────────────┴────────────────────────────┴─────────────────────────┘
-
-【数据流向】
-→ 被所有层调用（data_fetcher, processor, analyzer）
-→ 确保金额精度不丢失（避免 float 精度问题）
-====================================================================
+Precision helpers for financial values.
 """
 
-from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
-from typing import Any, Optional
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from typing import Any
 
-# 金额精度：保留2位小数（单位：元）
 AMOUNT_PRECISION = Decimal("0.01")
-
-# 比率精度：保留4位小数（如 0.1234 = 12.34%）
 RATIO_PRECISION = Decimal("0.0001")
-
-# 百分比精度：保留2位小数（如 12.34%）
 PERCENTAGE_PRECISION = Decimal("0.01")
+
+_PLACEHOLDER_VALUES = {"", "--", "-", "—", "N/A", "n/a", "null", "None"}
+_CHINESE_AMOUNT_UNITS = {
+    "亿": Decimal("100000000"),
+    "万": Decimal("10000"),
+    "千": Decimal("1000"),
+}
+
+
+def _normalize_amount_input(value: Any) -> Decimal | None:
+    if isinstance(value, Decimal):
+        return value
+
+    text = str(value).strip().replace(",", "")
+    if text in _PLACEHOLDER_VALUES:
+        return Decimal("0")
+
+    multiplier = Decimal("1")
+    for unit, scale in _CHINESE_AMOUNT_UNITS.items():
+        if text.endswith(unit):
+            text = text[: -len(unit)].strip()
+            multiplier = scale
+            break
+
+    if text.endswith("%"):
+        text = text[:-1].strip()
+
+    if text in _PLACEHOLDER_VALUES:
+        return Decimal("0")
+
+    try:
+        return Decimal(text) * multiplier
+    except (InvalidOperation, ValueError):
+        return None
 
 
 def to_amount(value: Any) -> Decimal:
-    """
-    安全转换为金额精度（保留2位小数）
-
-    Args:
-        value: 任意类型的数值（int, float, str, Decimal）
-
-    Returns:
-        Decimal: 保留2位小数的金额
-
-    Examples:
-        >>> to_amount(123.456)
-        Decimal('123.46')
-        >>> to_amount("1000.999")
-        Decimal('1001.00')
-    """
     if value is None or value == "":
         return Decimal("0.00")
 
+    decimal_value = _normalize_amount_input(value)
+    if decimal_value is None:
+        return Decimal("0.00")
+
     try:
-        # 先转为字符串再转 Decimal，避免 float 精度问题
-        decimal_value = Decimal(str(value))
         return decimal_value.quantize(AMOUNT_PRECISION, rounding=ROUND_HALF_UP)
     except (InvalidOperation, ValueError):
         return Decimal("0.00")
 
 
 def to_ratio(value: Any) -> Decimal:
-    """
-    安全转换为比率精度（保留4位小数）
-
-    Args:
-        value: 任意类型的数值
-
-    Returns:
-        Decimal: 保留4位小数的比率
-
-    Examples:
-        >>> to_ratio(0.123456)
-        Decimal('0.1235')
-        >>> to_ratio("0.5")
-        Decimal('0.5000')
-    """
     if value is None or value == "":
         return Decimal("0.0000")
 
@@ -88,19 +70,6 @@ def to_ratio(value: Any) -> Decimal:
 
 
 def to_percentage(value: Any) -> Decimal:
-    """
-    安全转换为百分比精度（保留2位小数）
-
-    Args:
-        value: 任意类型的数值（如 0.1234 表示 12.34%）
-
-    Returns:
-        Decimal: 保留2位小数的百分比值
-
-    Examples:
-        >>> to_percentage(0.1234)
-        Decimal('12.34')
-    """
     if value is None or value == "":
         return Decimal("0.00")
 
@@ -112,23 +81,6 @@ def to_percentage(value: Any) -> Decimal:
 
 
 def safe_divide(numerator: Decimal, denominator: Decimal, precision: Decimal = RATIO_PRECISION) -> Decimal:
-    """
-    安全除法，避免除零错误
-
-    Args:
-        numerator: 分子
-        denominator: 分母
-        precision: 精度（默认为比率精度）
-
-    Returns:
-        Decimal: 计算结果，分母为0时返回0
-
-    Examples:
-        >>> safe_divide(Decimal("100"), Decimal("50"))
-        Decimal('2.0000')
-        >>> safe_divide(Decimal("100"), Decimal("0"))
-        Decimal('0.0000')
-    """
     if denominator == 0 or denominator is None:
         return Decimal("0").quantize(precision)
 
@@ -140,35 +92,5 @@ def safe_divide(numerator: Decimal, denominator: Decimal, precision: Decimal = R
 
 
 def validate_precision(value: Decimal, expected_precision: Decimal) -> bool:
-    """
-    验证 Decimal 值是否符合预期精度
-
-    Args:
-        value: 待验证的 Decimal 值
-        expected_precision: 预期精度（如 Decimal("0.01")）
-
-    Returns:
-        bool: 是否符合精度要求
-    """
     quantized = value.quantize(expected_precision, rounding=ROUND_HALF_UP)
     return value == quantized
-
-
-"""
-====================================================================
-【使用示例】
-
-# 1. 金额转换
-amount = to_amount(123456.789)  # Decimal('123456.79')
-
-# 2. 比率转换
-ratio = to_ratio(0.123456)  # Decimal('0.1235')
-
-# 3. 安全除法
-roe = safe_divide(net_income, total_equity)  # 避免除零
-
-# 4. 百分比转换
-percentage = to_percentage(0.1234)  # Decimal('12.34')
-
-====================================================================
-"""

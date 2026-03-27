@@ -22,6 +22,7 @@ class ArchiveWorkspace:
     stock_name: str
     market: str
     snapshot: FinancialSnapshot
+    indicator_snapshot: Dict[str, object]
     archives: List[WorkspaceArchiveItem]
     latest_report_date: str | None
 
@@ -52,6 +53,7 @@ class WorkspaceRepository:
             stock_name=stock_name,
             market=market,
             snapshot=stock_snapshot,
+            indicator_snapshot=self._load_indicator_snapshot(archive_items),
             archives=archive_items,
             latest_report_date=latest_report_date,
         )
@@ -63,7 +65,7 @@ class WorkspaceRepository:
             stock_codes[manifest["stock_code"]].append(manifest)
 
         summaries: List[WorkspaceSummary] = []
-        for stock_code, _items in stock_codes.items():
+        for stock_code in stock_codes:
             workspace = self.load_workspace(stock_code)
             summaries.append(
                 WorkspaceSummary(
@@ -130,6 +132,27 @@ class WorkspaceRepository:
             income_statements=income_statements,
             cashflow_statements=cashflow_statements,
         )
+
+    def _load_indicator_snapshot(self, archive_items: List[WorkspaceArchiveItem]) -> Dict[str, object]:
+        for item in archive_items:
+            if item.dataset != Dataset.FINANCIAL_INDICATORS.value:
+                continue
+
+            payload = self._read_raw_payload(item.raw_path)
+            latest = payload.get("latest")
+            if isinstance(latest, dict):
+                return latest
+
+            rows = payload.get("rows")
+            if isinstance(rows, list):
+                indicator_snapshot: Dict[str, object] = {}
+                for row in rows:
+                    if isinstance(row, dict) and row.get("metric"):
+                        indicator_snapshot[str(row["metric"])] = row.get("latest_value")
+                if indicator_snapshot:
+                    return indicator_snapshot
+
+        return {}
 
     def _read_raw_payload(self, raw_path: str) -> Dict[str, object]:
         path = Path(raw_path)

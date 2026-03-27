@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import Dict, List
+from typing import Any, Dict, List
 
 from src.analyzer.cashflow_analyzer import analyze as analyze_cashflow
 from src.analyzer.dupont_analyzer import analyze as analyze_dupont
@@ -9,7 +9,7 @@ from src.analyzer.ratio_calculator import calc_efficiency, calc_profitability, c
 from src.analyzer.trend_analyzer import calc_yoy
 from src.crawler.interfaces import FinancialSnapshot
 from src.models.workspace_metrics import MetricCatalogItem, MetricValueItem, WorkspaceMetricBundle
-from src.utils.precision import safe_divide
+from src.utils.precision import safe_divide, to_amount
 
 
 class WorkspaceMetricEngine:
@@ -60,7 +60,13 @@ class WorkspaceMetricEngine:
         "total_equity",
     }
 
-    def build_bundle(self, snapshot: FinancialSnapshot, stock_name: str = "") -> WorkspaceMetricBundle:
+    def build_bundle(
+        self,
+        snapshot: FinancialSnapshot,
+        stock_name: str = "",
+        indicator_snapshot: Dict[str, Any] | None = None,
+    ) -> WorkspaceMetricBundle:
+        indicator_snapshot = indicator_snapshot or {}
         balance_sheet = snapshot.balance_sheets[0]
         income_statement = snapshot.income_statements[0]
         previous_income = snapshot.income_statements[1] if len(snapshot.income_statements) >= 2 else None
@@ -73,26 +79,50 @@ class WorkspaceMetricEngine:
         dupont = analyze_dupont(balance_sheet, income_statement)
         cashflow = analyze_cashflow(cashflow_statement, income_statement) if cashflow_statement else None
 
+        total_assets = self._fallback_amount(balance_sheet.total_assets, indicator_snapshot.get("total_assets"))
+        total_equity = self._fallback_amount(balance_sheet.total_equity, indicator_snapshot.get("total_equity"))
+        debt_to_asset_ratio = self._fallback_ratio(
+            primary=solvency.debt_to_asset_ratio,
+            secondary=indicator_snapshot.get("debt_to_asset_ratio"),
+            derived=safe_divide(balance_sheet.total_liabilities, total_assets),
+        )
+        total_liabilities = self._fallback_amount(
+            primary=balance_sheet.total_liabilities,
+            secondary=indicator_snapshot.get("total_liabilities"),
+            derived=total_assets * debt_to_asset_ratio if total_assets and debt_to_asset_ratio else Decimal("0"),
+        )
+        net_income = self._fallback_amount(income_statement.net_income, indicator_snapshot.get("net_income"))
+        roe = self._fallback_ratio(
+            primary=profitability.roe,
+            secondary=indicator_snapshot.get("roe"),
+            derived=safe_divide(net_income, total_equity),
+        )
+        roa = self._fallback_ratio(
+            primary=profitability.roa,
+            secondary=indicator_snapshot.get("roa"),
+            derived=safe_divide(net_income, total_assets),
+        )
+
         raw_values: Dict[str, Decimal] = {
-            "roe": profitability.roe,
-            "roa": profitability.roa,
-            "net_profit_margin": profitability.net_profit_margin,
+            "roe": roe,
+            "roa": roa,
+            "net_profit_margin": safe_divide(net_income, income_statement.total_revenue),
             "gross_profit_margin": profitability.gross_profit_margin,
             "operating_margin": safe_divide(income_statement.operating_profit, income_statement.total_revenue),
             "pretax_margin": safe_divide(income_statement.total_profit, income_statement.total_revenue),
             "current_ratio": solvency.current_ratio,
             "quick_ratio": solvency.quick_ratio,
-            "debt_to_asset_ratio": solvency.debt_to_asset_ratio,
-            "debt_to_equity_ratio": solvency.debt_to_equity_ratio,
-            "equity_ratio": safe_divide(balance_sheet.total_equity, balance_sheet.total_assets),
+            "debt_to_asset_ratio": debt_to_asset_ratio,
+            "debt_to_equity_ratio": safe_divide(total_liabilities, total_equity),
+            "equity_ratio": safe_divide(total_equity, total_assets),
             "working_capital": balance_sheet.total_current_assets - balance_sheet.total_current_liabilities,
-            "asset_turnover": efficiency.asset_turnover,
-            "equity_multiplier": dupont.equity_multiplier,
-            "revenue_to_equity": safe_divide(income_statement.total_revenue, balance_sheet.total_equity),
+            "asset_turnover": safe_divide(income_statement.total_revenue, total_assets),
+            "equity_multiplier": safe_divide(total_assets, total_equity),
+            "revenue_to_equity": safe_divide(income_statement.total_revenue, total_equity),
             "current_asset_turnover": safe_divide(income_statement.total_revenue, balance_sheet.total_current_assets),
             "operating_cashflow": cashflow.operating_cashflow if cashflow else Decimal("0"),
             "free_cash_flow": cashflow.free_cash_flow if cashflow else Decimal("0"),
-            "cash_to_profit_ratio": cashflow.cash_to_profit_ratio if cashflow else Decimal("0"),
+            "cash_to_profit_ratio": safe_divide(cashflow.operating_cashflow, net_income) if cashflow else Decimal("0"),
             "operating_cashflow_margin": safe_divide(
                 cashflow.operating_cashflow if cashflow else Decimal("0"),
                 income_statement.total_revenue,
@@ -100,7 +130,7 @@ class WorkspaceMetricEngine:
             "net_cashflow": cashflow_statement.net_cashflow if cashflow_statement else Decimal("0"),
             "investing_cashflow": cashflow_statement.investing_cashflow if cashflow_statement else Decimal("0"),
             "financing_cashflow": cashflow_statement.financing_cashflow if cashflow_statement else Decimal("0"),
-            "net_income_yoy": calc_yoy(income_statement.net_income, previous_income.net_income) if previous_income else Decimal("0"),
+            "net_income_yoy": calc_yoy(net_income, previous_income.net_income) if previous_income else Decimal("0"),
             "revenue_yoy": calc_yoy(income_statement.total_revenue, previous_income.total_revenue) if previous_income else Decimal("0"),
             "operating_profit_yoy": calc_yoy(income_statement.operating_profit, previous_income.operating_profit) if previous_income else Decimal("0"),
             "operating_cashflow_yoy": (
@@ -108,9 +138,9 @@ class WorkspaceMetricEngine:
                 if cashflow_statement and previous_cashflow
                 else Decimal("0")
             ),
-            "total_assets": balance_sheet.total_assets,
-            "total_liabilities": balance_sheet.total_liabilities,
-            "total_equity": balance_sheet.total_equity,
+            "total_assets": total_assets,
+            "total_liabilities": total_liabilities,
+            "total_equity": total_equity,
         }
 
         values = [
@@ -159,6 +189,34 @@ class WorkspaceMetricEngine:
             value=formatted,
             period=None,
         )
+
+    @staticmethod
+    def _fallback_amount(primary: Decimal, secondary: Any, derived: Decimal | None = None) -> Decimal:
+        if primary != 0:
+            return primary
+        secondary_amount = to_amount(secondary)
+        if secondary_amount != 0:
+            return secondary_amount
+        return derived if derived is not None else Decimal("0")
+
+    @staticmethod
+    def _fallback_ratio(primary: Decimal, secondary: Any, derived: Decimal | None = None) -> Decimal:
+        if primary != 0:
+            return primary.quantize(Decimal("0.0001"))
+
+        if secondary not in (None, ""):
+            try:
+                secondary_ratio = Decimal(str(secondary))
+                if abs(secondary_ratio) > 1:
+                    return (secondary_ratio / Decimal("100")).quantize(Decimal("0.0001"))
+                return secondary_ratio.quantize(Decimal("0.0001"))
+            except Exception:
+                pass
+
+        if derived is not None and derived != 0:
+            return derived.quantize(Decimal("0.0001"))
+
+        return Decimal("0.0000")
 
     @staticmethod
     def _build_summary(stock_code: str, stock_name: str, values: Dict[str, Decimal]) -> str:
