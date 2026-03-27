@@ -3,6 +3,7 @@
 from functools import lru_cache
 
 from src.crawler.service import CrawlerService
+from src.api.workspace_service import WorkspaceService
 
 
 @lru_cache(maxsize=1)
@@ -20,4 +21,9 @@ def get_crawler_service() -> CrawlerService:
 # Backward-compatible alias for legacy code paths.
 def get_akshare_client() -> CrawlerService:
     return get_crawler_service()
+
+
+@lru_cache(maxsize=1)
+def get_workspace_service() -> WorkspaceService:
+    return WorkspaceService()
 

@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.api import routes_analysis, routes_report, routes_stock, routes_v2
+import src.api.routes_workspace as routes_workspace
 from src.config.settings import settings
 from src.utils.logger import logger, setup_logger
 
@@ -29,6 +30,7 @@ app.include_router(routes_stock.router)
 app.include_router(routes_analysis.router)
 app.include_router(routes_report.router)
 app.include_router(routes_v2.router)
+app.include_router(routes_workspace.router)
 
 
 @app.on_event("startup")

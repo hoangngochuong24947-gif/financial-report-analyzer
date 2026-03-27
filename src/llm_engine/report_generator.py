@@ -29,9 +29,13 @@ from src.analyzer.ratio_calculator import calc_profitability, calc_solvency, cal
 from src.analyzer.dupont_analyzer import analyze as dupont_analyze
 from src.analyzer.cashflow_analyzer import analyze as cashflow_analyze
 from src.analyzer.trend_analyzer import calc_yoy
-from src.crawler.interfaces import FinancialDataGateway
+from src.crawler.interfaces import FinancialDataGateway, FinancialSnapshot
 from src.crawler.service import CrawlerService
 from src.models.analysis_result import AnalysisReport
+from src.storage.workspace_repository import ArchiveWorkspace
+from src.api.workspace_service import WorkspaceService
+from src.analyzer.metric_engine import WorkspaceMetricEngine
+from src.llm_engine.context_builder import PromptContextBuilder
 from src.llm_engine.llm_client import get_llm_client
 from src.llm_engine.prompt_templates import (
     SYSTEM_PROMPT,
@@ -81,30 +85,58 @@ class ReportGenerator:
         """
         logger.info(f"Generating AI report for {stock_code} ({stock_name})...")
 
-        # Step 1: 收集所有财务指标
-        metrics = self._collect_metrics(stock_code)
+        # Step 1: 组装 archive-first 上下文
+        context = self._build_ai_context(stock_code, stock_name)
 
-        if not metrics:
-            raise RuntimeError(f"无法获取 {stock_code} 的财务数据，请检查股票代码是否正确。")
-
-        # Step 2: 组装 Prompt
-        report_date = metrics.get("report_date", "未知")
-        prompt = self._build_prompt(stock_code, stock_name, report_date, metrics)
-
-        # Step 3: 调用 LLM
+        # Step 2: 调用 LLM
         llm_client = get_llm_client()
-        raw_response = llm_client.analyze(prompt=prompt, system_prompt=SYSTEM_PROMPT)
+        raw_response = llm_client.analyze(prompt=context.context_text, system_prompt=context.system_prompt)
 
-        # Step 4: 解析回复并构建 AnalysisReport
+        # Step 3: 解析回复并构建 AnalysisReport
         report = self._parse_response(
             raw_response=raw_response,
             stock_code=stock_code,
             stock_name=stock_name or stock_code,
-            report_date=report_date,
+            report_date=context.report_date,
         )
 
         logger.info(f"AI report generated for {stock_code}: {len(raw_response)} chars")
         return report
+
+    def _build_ai_context(self, stock_code: str, stock_name: str):
+        """
+        Construct an archive-first AI context bundle.
+        """
+        try:
+            workspace = WorkspaceService().get_workspace(stock_code)
+        except Exception:
+            workspace = ArchiveWorkspace(
+                stock_code=stock_code,
+                stock_name=stock_name or stock_code,
+                market="ab",
+                snapshot=self._build_live_snapshot(stock_code),
+                archives=[],
+                latest_report_date=None,
+            )
+
+        bundle = WorkspaceMetricEngine().build_bundle(snapshot=workspace.snapshot, stock_name=workspace.stock_name)
+        return PromptContextBuilder().build(workspace=workspace, metric_bundle=bundle, profile_key="archive_review")
+
+    def _build_live_snapshot(self, stock_code: str):
+        """Fallback snapshot builder for legacy live-provider paths."""
+        balance_sheets = self._client.fetch_balance_sheet(stock_code)
+        income_statements = self._client.fetch_income_statement(stock_code)
+        cashflow_statements = self._client.fetch_cashflow_statement(stock_code)
+
+        if not balance_sheets or not income_statements:
+            raise RuntimeError(f"无法获取 {stock_code} 的财务数据，请检查股票代码是否正确。")
+
+        return FinancialSnapshot(
+            stock_code=stock_code,
+            balance_sheets=balance_sheets,
+            income_statements=income_statements,
+            cashflow_statements=cashflow_statements,
+        )
 
     def _collect_metrics(self, stock_code: str) -> Dict[str, Any]:
         """

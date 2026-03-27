@@ -149,3 +149,5 @@ export async function getTrendAnalysis(
   }
   return data as TrendResult;
 }
+
+export * from "./workspace";

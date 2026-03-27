@@ -1,136 +1,71 @@
-import { useEffect, useMemo, useState } from "react";
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createCrawlerJob,
-  getCashflowAnalysis,
   getCrawlerJobStatus,
-  getDuPont,
-  getFinancialRatios,
-  getSnapshot,
-  getTrendAnalysis,
   listStocks,
-  type FinancialRatios,
-  type SnapshotPayload,
   type StockInfo,
 } from "./api/sdk";
+import {
+  getWorkspaceAiInsightsContext,
+  getWorkspaceMetricCatalog,
+  getWorkspaceMetricValues,
+  getWorkspaceModelResults,
+  getWorkspaceSnapshot,
+} from "./api/workspace";
+import { SectionCard, StateBlock } from "./components/DataBlocks";
+import { WorkspaceChrome } from "./components/WorkspaceChrome";
+import { WorkspaceSummary } from "./components/WorkspaceSummary";
+import { InsightsPage } from "./pages/InsightsPage";
+import { MetricsPage } from "./pages/MetricsPage";
+import { ModelsPage } from "./pages/ModelsPage";
+import { formatDate, formatDateTime } from "./lib/finance";
+import {
+  WORKSPACE_ROUTE_META,
+  WORKSPACE_TABS,
+  type WorkspaceRoute,
+  useWorkspaceRoute,
+} from "./lib/routing";
 
 type JobState = "idle" | "queued" | "started" | "finished" | "failed";
-
-function toTitle(rawKey: string): string {
-  return rawKey
-    .replaceAll("_", " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .replace(/\b\w/g, (m) => m.toUpperCase());
-}
-
-function formatValue(value: unknown): string {
-  if (value === null || value === undefined) {
-    return "-";
-  }
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? value.toLocaleString("en-US") : "-";
-  }
-  if (typeof value === "string") {
-    return value;
-  }
-  if (typeof value === "boolean") {
-    return value ? "Yes" : "No";
-  }
-  return String(value);
-}
-
-function getStatementRows(
-  snapshot: SnapshotPayload | undefined,
-  key: "balance_sheet" | "income_statement" | "cashflow_statement",
-): Array<[string, unknown]> {
-  const source = snapshot?.statements?.[key]?.[0];
-  if (!source || typeof source !== "object") {
-    return [];
-  }
-
-  return Object.entries(source).filter(([field]) => {
-    return !["stock_code", "stock_name"].includes(field);
-  });
-}
 
 function getJobStatus(data: unknown): string {
   if (data && typeof data === "object" && "status" in data) {
     return String((data as { status?: unknown }).status ?? "");
   }
+
   return "";
 }
 
-function FieldGrid(props: { title: string; data: Record<string, unknown> | undefined }) {
-  const items = Object.entries(props.data ?? {});
-  if (items.length === 0) {
-    return (
-      <section className="panel">
-        <header className="panel-title">{props.title}</header>
-        <p className="placeholder">No data available.</p>
-      </section>
-    );
+function routeTone(route: WorkspaceRoute): "neutral" | "positive" | "warning" {
+  if (route === "insights") {
+    return "positive";
   }
 
-  return (
-    <section className="panel">
-      <header className="panel-title">{props.title}</header>
-      <div className="metrics-grid">
-        {items.map(([key, value]) => (
-          <article key={key} className="metric-card">
-            <h4>{toTitle(key)}</h4>
-            <p>{formatValue(value)}</p>
-          </article>
-        ))}
-      </div>
-    </section>
-  );
+  if (route === "models") {
+    return "warning";
+  }
+
+  return "neutral";
 }
 
-function StatementTable(props: {
-  title: string;
-  rows: Array<[string, unknown]>;
-}) {
-  return (
-    <section className="panel">
-      <header className="panel-title">{props.title}</header>
-      {props.rows.length === 0 ? (
-        <p className="placeholder">No statement rows available.</p>
-      ) : (
-        <div className="statement-table-wrap">
-          <table className="statement-table">
-            <thead>
-              <tr>
-                <th>Field</th>
-                <th>Value</th>
-              </tr>
-            </thead>
-            <tbody>
-              {props.rows.map(([key, value]) => (
-                <tr key={key}>
-                  <td>{toTitle(key)}</td>
-                  <td>{formatValue(value)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </section>
-  );
+function jobTone(jobState: JobState): "neutral" | "positive" | "warning" | "danger" {
+  if (jobState === "finished") return "positive";
+  if (jobState === "queued" || jobState === "started") return "warning";
+  if (jobState === "failed") return "danger";
+  return "neutral";
 }
 
-function App() {
+export default function App() {
   const queryClient = useQueryClient();
+  const { route, navigate } = useWorkspaceRoute();
   const [search, setSearch] = useState("");
   const [market, setMarket] = useState("ALL");
-  const [selectedCode, setSelectedCode] = useState<string>("");
+  const [selectedCode, setSelectedCode] = useState("");
   const [manualCode, setManualCode] = useState("");
-  const [jobId, setJobId] = useState<string>("");
+  const [jobId, setJobId] = useState("");
+
+  const deferredSearch = useDeferredValue(search);
 
   const stocksQuery = useQuery({
     queryKey: ["stocks", market],
@@ -158,53 +93,25 @@ function App() {
 
   const visibleStocks = useMemo(() => {
     const source = stocksQuery.data ?? [];
-    if (!search.trim()) {
+    const keyword = deferredSearch.trim().toLowerCase();
+    if (!keyword) {
       return source;
     }
-    const keyword = search.toLowerCase();
+
     return source.filter((item) => {
       return (
         item.stock_code.toLowerCase().includes(keyword) ||
-        item.stock_name.toLowerCase().includes(keyword)
+        item.stock_name.toLowerCase().includes(keyword) ||
+        (item.industry ?? "").toLowerCase().includes(keyword)
       );
     });
-  }, [search, stocksQuery.data]);
+  }, [deferredSearch, stocksQuery.data]);
 
   const selectedStock: StockInfo | undefined = useMemo(() => {
     return (stocksQuery.data ?? []).find((item) => item.stock_code === selectedCode);
   }, [selectedCode, stocksQuery.data]);
 
-  const snapshotQuery = useQuery({
-    queryKey: ["snapshot", selectedCode],
-    enabled: Boolean(selectedCode),
-    queryFn: () => getSnapshot({ code: selectedCode, latestOnly: true }),
-  });
-
-  const ratiosQuery = useQuery({
-    queryKey: ["ratios", selectedCode],
-    enabled: Boolean(selectedCode),
-    queryFn: () => getFinancialRatios(selectedCode),
-  });
-
-  const dupontQuery = useQuery({
-    queryKey: ["dupont", selectedCode],
-    enabled: Boolean(selectedCode),
-    queryFn: () => getDuPont(selectedCode),
-  });
-
-  const cashflowQuery = useQuery({
-    queryKey: ["cashflow", selectedCode],
-    enabled: Boolean(selectedCode),
-    queryFn: () => getCashflowAnalysis(selectedCode),
-  });
-
-  const trendQuery = useQuery({
-    queryKey: ["trend", selectedCode, "net_income"],
-    enabled: Boolean(selectedCode),
-    queryFn: () => getTrendAnalysis(selectedCode, "net_income"),
-  });
-
-  const refreshMutation = useMutation({
+  const refreshStockMutation = useMutation({
     mutationFn: async () => {
       if (!selectedCode) {
         throw new Error("Select one stock before refreshing.");
@@ -214,15 +121,16 @@ function App() {
     onSuccess: (result) => {
       if (result.status === "queued") {
         setJobId(result.job_id);
-      } else {
-        setJobId("");
-        if (selectedCode) {
-          queryClient.invalidateQueries({ queryKey: ["snapshot", selectedCode] });
-          queryClient.invalidateQueries({ queryKey: ["ratios", selectedCode] });
-          queryClient.invalidateQueries({ queryKey: ["dupont", selectedCode] });
-          queryClient.invalidateQueries({ queryKey: ["cashflow", selectedCode] });
-          queryClient.invalidateQueries({ queryKey: ["trend", selectedCode, "net_income"] });
-        }
+        return;
+      }
+
+      setJobId("");
+      if (selectedCode) {
+        queryClient.invalidateQueries({ queryKey: ["workspace-snapshot", selectedCode] });
+        queryClient.invalidateQueries({ queryKey: ["workspace-metric-catalog", selectedCode] });
+        queryClient.invalidateQueries({ queryKey: ["workspace-metric-values", selectedCode] });
+        queryClient.invalidateQueries({ queryKey: ["workspace-models", selectedCode] });
+        queryClient.invalidateQueries({ queryKey: ["workspace-insights-context", selectedCode] });
       }
     },
   });
@@ -257,173 +165,257 @@ function App() {
   useEffect(() => {
     const status = getJobStatus(jobQuery.data);
     if (status === "finished" && selectedCode) {
-      queryClient.invalidateQueries({ queryKey: ["snapshot", selectedCode] });
-      queryClient.invalidateQueries({ queryKey: ["ratios", selectedCode] });
-      queryClient.invalidateQueries({ queryKey: ["dupont", selectedCode] });
-      queryClient.invalidateQueries({ queryKey: ["cashflow", selectedCode] });
-      queryClient.invalidateQueries({ queryKey: ["trend", selectedCode, "net_income"] });
+      queryClient.invalidateQueries({ queryKey: ["workspace-snapshot", selectedCode] });
+      queryClient.invalidateQueries({ queryKey: ["workspace-metric-catalog", selectedCode] });
+      queryClient.invalidateQueries({ queryKey: ["workspace-metric-values", selectedCode] });
+      queryClient.invalidateQueries({ queryKey: ["workspace-models", selectedCode] });
+      queryClient.invalidateQueries({ queryKey: ["workspace-insights-context", selectedCode] });
     }
   }, [jobQuery.data, queryClient, selectedCode]);
 
+  useEffect(() => {
+    if (!selectedCode) {
+      return;
+    }
+
+    void Promise.all([
+      queryClient.prefetchQuery({
+        queryKey: ["workspace-snapshot", selectedCode],
+        queryFn: () => getWorkspaceSnapshot(selectedCode),
+      }),
+      queryClient.prefetchQuery({
+        queryKey: ["workspace-metric-catalog", selectedCode],
+        queryFn: () => getWorkspaceMetricCatalog(selectedCode),
+      }),
+      queryClient.prefetchQuery({
+        queryKey: ["workspace-metric-values", selectedCode],
+        queryFn: () => getWorkspaceMetricValues(selectedCode),
+      }),
+      queryClient.prefetchQuery({
+        queryKey: ["workspace-models", selectedCode],
+        queryFn: () => getWorkspaceModelResults(selectedCode),
+      }),
+      queryClient.prefetchQuery({
+        queryKey: ["workspace-insights-context", selectedCode],
+        queryFn: () => getWorkspaceAiInsightsContext(selectedCode),
+      }),
+    ]);
+  }, [queryClient, selectedCode]);
+
   const jobState = (getJobStatus(jobQuery.data) || (jobId ? "queued" : "idle")) as JobState;
+  const activeRouteMeta = WORKSPACE_ROUTE_META[route];
 
-  const ratioData = ratiosQuery.data as FinancialRatios | undefined;
-
-  return (
-    <div className="app-shell">
-      <div className="bg-ornament bg-ornament-a" />
-      <div className="bg-ornament bg-ornament-b" />
-
-      <header className="topbar">
-        <div>
-          <h1>Financial Report Analyzer</h1>
-          <p>v2 Snapshot + Async Crawler + v1 Analysis Dashboard</p>
-        </div>
-        <div className="status-box">
-          <span>Job</span>
-          <strong data-status={jobState}>{jobState.toUpperCase()}</strong>
-        </div>
-      </header>
-
-      <main className="layout">
-        <aside className="sidebar panel">
-          <div className="sidebar-header">
-            <h2>Stocks</h2>
+  const leftRail = (
+    <div className="rail-stack">
+      <SectionCard title="Stock explorer" eyebrow="Registry">
+        <div className="control-stack">
+          <label className="field">
+            <span>Market</span>
             <select
               value={market}
-              onChange={(e) => {
-                setMarket(e.target.value);
+              onChange={(event) => {
+                setMarket(event.target.value);
                 setSelectedCode("");
               }}
             >
-              {markets.map((item) => (
-                <option value={item} key={item}>
-                  {item}
+              {markets.map((value) => (
+                <option key={value} value={value}>
+                  {value}
                 </option>
               ))}
             </select>
+          </label>
+
+          <label className="field">
+            <span>Search</span>
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Code, company, or industry"
+            />
+          </label>
+
+          <label className="field">
+            <span>Manual code</span>
+            <div className="inline-action">
+              <input
+                value={manualCode}
+                onChange={(event) => setManualCode(event.target.value.trim())}
+                placeholder="e.g. 600519"
+              />
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() => {
+                  if (!manualCode) {
+                    return;
+                  }
+                  setSelectedCode(manualCode);
+                  setSearch("");
+                }}
+              >
+                Load
+              </button>
+            </div>
+          </label>
+
+          <div className="inline-action">
             <button
-              className="refresh-list-btn"
+              type="button"
+              className="ghost-button"
               onClick={() => refreshStocksMutation.mutate()}
               disabled={refreshStocksMutation.isPending}
             >
-              {refreshStocksMutation.isPending ? "Refreshing..." : "Refresh List"}
+              {refreshStocksMutation.isPending ? "Refreshing list..." : "Refresh registry"}
             </button>
-          </div>
-
-          <input
-            className="search"
-            placeholder="Search by code or name"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-          <div className="manual-code-box">
-            <input
-              className="search"
-              placeholder="Enter stock code (e.g. 601318)"
-              value={manualCode}
-              onChange={(e) => setManualCode(e.target.value.trim())}
-            />
             <button
-              className="load-code-btn"
-              onClick={() => {
-                if (!manualCode) {
-                  return;
-                }
-                setSelectedCode(manualCode);
-                setSearch("");
-              }}
+              type="button"
+              className="ghost-button"
+              onClick={() => refreshStockMutation.mutate()}
+              disabled={refreshStockMutation.isPending || !selectedCode}
             >
-              Load Code
+              {refreshStockMutation.isPending ? "Refreshing feed..." : "Refresh selected"}
             </button>
           </div>
+        </div>
+      </SectionCard>
 
+      <SectionCard
+        title="Workspace pages"
+        eyebrow="Navigation"
+        action={<span className="section-meta">{activeRouteMeta.title}</span>}
+      >
+        <div className="route-rail">
+          {WORKSPACE_TABS.map((tab) => (
+            <button
+              key={tab.route}
+              type="button"
+              className={`rail-tab ${route === tab.route ? "rail-tab-active" : ""}`}
+              onClick={() => navigate(tab.route)}
+            >
+              <strong>{tab.label}</strong>
+              <span>{tab.note}</span>
+            </button>
+          ))}
+        </div>
+      </SectionCard>
+
+      <SectionCard title="Selected stocks" eyebrow="Live feed">
+        {stocksQuery.isLoading ? (
+          <StateBlock title="Loading registry" description="Fetching the latest stock list." />
+        ) : stocksQuery.isError ? (
+          <StateBlock
+            tone="danger"
+            title="Registry unavailable"
+            description={(stocksQuery.error as Error).message}
+          />
+        ) : (
           <div className="stock-list">
-            {stocksQuery.isLoading && <p className="placeholder">Loading stock list...</p>}
-            {stocksQuery.isError && (
-              <p className="error-text">Failed to load stocks: {(stocksQuery.error as Error).message}</p>
+            {visibleStocks.length === 0 ? (
+              <StateBlock
+                title="No matches"
+                description="Try a different search term or clear the filters."
+              />
+            ) : (
+              visibleStocks.map((stock) => (
+                <button
+                  key={stock.stock_code}
+                  type="button"
+                  className={`stock-item ${selectedCode === stock.stock_code ? "stock-item-active" : ""}`}
+                  onClick={() => setSelectedCode(stock.stock_code)}
+                >
+                  <strong>{stock.stock_name}</strong>
+                  <span>{stock.stock_code}</span>
+                  <em>{stock.market ?? "Unknown market"}</em>
+                </button>
+              ))
             )}
-            {visibleStocks.map((stock) => (
-              <button
-                key={stock.stock_code}
-                className={`stock-item ${
-                  selectedCode === stock.stock_code ? "stock-item-active" : ""
-                }`}
-                onClick={() => setSelectedCode(stock.stock_code)}
-              >
-                <strong>{stock.stock_name}</strong>
-                <span>{stock.stock_code}</span>
-                <em>{stock.market ?? "N/A"}</em>
-              </button>
-            ))}
           </div>
-        </aside>
-
-        <section className="content">
-          <section className="panel hero">
-            <div>
-              <h2>{selectedStock?.stock_name ?? "Select a stock"}</h2>
-              <p>
-                {selectedStock?.stock_code ?? "-"}
-                {" · "}
-                {selectedStock?.market ?? "Unknown Market"}
-              </p>
-            </div>
-            <button
-              className="refresh-btn"
-              onClick={() => refreshMutation.mutate()}
-              disabled={refreshMutation.isPending || !selectedCode}
-            >
-              {refreshMutation.isPending ? "Submitting..." : "Refresh Crawler Data"}
-            </button>
-          </section>
-
-          {refreshMutation.isError && (
-            <p className="error-text">
-              Refresh failed: {(refreshMutation.error as Error).message}
-            </p>
-          )}
-
-          <div className="grid-2">
-            <StatementTable
-              title="Balance Sheet (Latest)"
-              rows={getStatementRows(snapshotQuery.data, "balance_sheet")}
-            />
-            <StatementTable
-              title="Income Statement (Latest)"
-              rows={getStatementRows(snapshotQuery.data, "income_statement")}
-            />
-          </div>
-
-          <StatementTable
-            title="Cashflow Statement (Latest)"
-            rows={getStatementRows(snapshotQuery.data, "cashflow_statement")}
-          />
-
-          <div className="grid-2">
-            <FieldGrid title="Profitability Ratios" data={ratioData?.profitability} />
-            <FieldGrid title="Solvency Ratios" data={ratioData?.solvency} />
-          </div>
-
-          <div className="grid-2">
-            <FieldGrid title="Efficiency Ratios" data={ratioData?.efficiency} />
-            <FieldGrid title="DuPont Analysis" data={dupontQuery.data as Record<string, unknown>} />
-          </div>
-
-          <div className="grid-2">
-            <FieldGrid
-              title="Cashflow Analysis"
-              data={cashflowQuery.data as Record<string, unknown>}
-            />
-            <FieldGrid
-              title="Trend Analysis (Net Income)"
-              data={trendQuery.data as Record<string, unknown>}
-            />
-          </div>
-        </section>
-      </main>
+        )}
+      </SectionCard>
     </div>
   );
-}
 
-export default App;
+  const rightRail = (
+    <div className="rail-stack">
+      <SectionCard title="Selected company" eyebrow="Context">
+        <div className="summary-stack">
+          <WorkspaceSummary
+            label="Company"
+            value={(selectedStock?.stock_name ?? selectedCode) || "Nothing selected"}
+            note={selectedStock?.stock_code ?? "Choose a company from the list"}
+          />
+          <WorkspaceSummary label="Market" value={selectedStock?.market ?? "Unknown"} note={selectedStock?.industry ?? "Industry unavailable"} />
+          <WorkspaceSummary label="Listed" value={formatDate(selectedStock?.list_date)} note="Registry listing date" />
+        </div>
+      </SectionCard>
+
+      <SectionCard title="Route context" eyebrow="Current page">
+        <WorkspaceSummary label="Page" value={activeRouteMeta.title} note={activeRouteMeta.description} />
+        <WorkspaceSummary
+          label="Tone"
+          value={routeTone(route).toUpperCase()}
+          note="The shell adjusts density by page"
+        />
+      </SectionCard>
+
+      <SectionCard title="Crawler job" eyebrow="Async state">
+        <div className="summary-stack">
+          <WorkspaceSummary
+            label="Status"
+            value={jobState.toUpperCase()}
+            note={jobId || "No active job"}
+          />
+          <WorkspaceSummary
+            label="Timestamp"
+            value={formatDateTime(jobQuery.data && typeof jobQuery.data === "object" && "updated_at" in jobQuery.data ? String((jobQuery.data as Record<string, unknown>).updated_at ?? "") : undefined)}
+            note="Latest poll time from the crawler API"
+          />
+        </div>
+      </SectionCard>
+
+      <SectionCard title="Workspace notes" eyebrow="Operational">
+        <StateBlock
+          tone={jobTone(jobState) === "danger" ? "danger" : jobTone(jobState) === "warning" ? "warning" : "neutral"}
+          title="Feed refresh"
+          description="Use the refresh buttons to update the stock registry or request a fresh crawler run for the selected company."
+        />
+      </SectionCard>
+    </div>
+  );
+
+  return (
+    <WorkspaceChrome
+      title="Financial Report Analyzer"
+      subtitle="A calm editorial workspace for metrics, models, and AI-written insight."
+      tabs={WORKSPACE_TABS}
+      activeRoute={route}
+      onNavigate={navigate}
+      leftRail={leftRail}
+      rightRail={rightRail}
+    >
+      <div className="workspace-header">
+        <div>
+          <span className="eyebrow">Selected stock</span>
+          <h2>{selectedStock?.stock_name ?? selectedCode ?? "Choose a company"}</h2>
+          <p>
+            {selectedStock?.stock_code ?? "—"} {selectedStock?.market ? ` / ${selectedStock.market}` : ""}
+            {selectedStock?.industry ? ` / ${selectedStock.industry}` : ""}
+          </p>
+        </div>
+        <div className="header-status">
+          <span>Active page</span>
+          <strong>{activeRouteMeta.title}</strong>
+        </div>
+      </div>
+
+      {route === "metrics" ? (
+        <MetricsPage selectedCode={selectedCode} selectedStock={selectedStock} />
+      ) : route === "models" ? (
+        <ModelsPage selectedCode={selectedCode} selectedStock={selectedStock} />
+      ) : (
+        <InsightsPage selectedCode={selectedCode} selectedStock={selectedStock} />
+      )}
+    </WorkspaceChrome>
+  );
+}

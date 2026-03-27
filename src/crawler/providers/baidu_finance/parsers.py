@@ -26,7 +26,11 @@ BALANCE_FIELD_ALIASES = {
     "total_current_liabilities": ["\u6d41\u52a8\u8d1f\u503a\u5408\u8ba1"],
     "total_non_current_liabilities": ["\u975e\u6d41\u52a8\u8d1f\u503a\u5408\u8ba1"],
     "total_liabilities": ["\u603b\u8d1f\u503a", "\u8d1f\u503a\u5408\u8ba1"],
-    "total_equity": ["\u6240\u6709\u8005\u6743\u76ca(\u6216\u80a1\u4e1c\u6743\u76ca)\u5408\u8ba1", "\u5f52\u5c5e\u6bcd\u516c\u53f8\u80a1\u4e1c\u6743\u76ca\u5408\u8ba1"],
+    "total_equity": [
+        "\u6240\u6709\u8005\u6743\u76ca(\u6216\u80a1\u4e1c\u6743\u76ca)\u5408\u8ba1",
+        "\u5f52\u5c5e\u6bcd\u516c\u53f8\u80a1\u4e1c\u6743\u76ca\u5408\u8ba1",
+        "\u6240\u6709\u8005\u6743\u76ca\u5408\u8ba1",
+    ],
 }
 
 CASHFLOW_FIELD_ALIASES = {
