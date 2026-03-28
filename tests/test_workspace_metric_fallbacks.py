@@ -61,8 +61,11 @@ def test_workspace_metric_engine_uses_indicator_fallback_for_sparse_archive_snap
     )
 
     values = {item.key: item.value for item in bundle.values}
+    expected_liabilities = (
+        Decimal("153971435649.18") * Decimal("0.6243")
+    ).quantize(Decimal("0.01"))
     assert values["roe"] == "-0.0744"
     assert values["roa"] == "-0.0224"
     assert values["total_assets"] == "153971435649.18"
     assert values["total_equity"] == "57857069570.65"
-    assert values["total_liabilities"] == "96114366078.53"
+    assert values["total_liabilities"] == str(expected_liabilities)

@@ -12,6 +12,8 @@ import {
   getWorkspaceMetricValues,
   getWorkspaceModelResults,
   getWorkspaceSnapshot,
+  listWorkspaces,
+  type WorkspaceSummary as WorkspaceArchiveSummary,
 } from "./api/workspace";
 import { SectionCard, StateBlock } from "./components/DataBlocks";
 import { WorkspaceChrome } from "./components/WorkspaceChrome";
@@ -56,6 +58,30 @@ function jobTone(jobState: JobState): "neutral" | "positive" | "warning" | "dang
   return "neutral";
 }
 
+type RailStock = StockInfo & {
+  dataset_count?: number;
+  latest_report_date?: string | null;
+  source: "archive" | "registry";
+};
+
+function toRailStock(summary: WorkspaceArchiveSummary): RailStock {
+  return {
+    stock_code: summary.stock_code,
+    stock_name: summary.stock_name,
+    market: summary.market,
+    latest_report_date: summary.latest_report_date ?? null,
+    dataset_count: summary.dataset_count,
+    source: "archive",
+  };
+}
+
+function toRegistryRailStock(stock: StockInfo): RailStock {
+  return {
+    ...stock,
+    source: "registry",
+  };
+}
+
 export default function App() {
   const queryClient = useQueryClient();
   const { route, navigate } = useWorkspaceRoute();
@@ -67,49 +93,112 @@ export default function App() {
 
   const deferredSearch = useDeferredValue(search);
 
-  const stocksQuery = useQuery({
+  const archiveWorkspacesQuery = useQuery({
+    queryKey: ["workspaces"],
+    queryFn: () => listWorkspaces(100),
+    staleTime: 10 * 60_000,
+  });
+
+  const registryStocksQuery = useQuery({
     queryKey: ["stocks", market],
+    enabled: false,
     queryFn: () =>
       listStocks({
         market: market === "ALL" ? undefined : market,
       }),
   });
 
+  const archiveStocks = useMemo(() => {
+    return (archiveWorkspacesQuery.data ?? []).map(toRailStock);
+  }, [archiveWorkspacesQuery.data]);
+
+  const registryStocks = useMemo(() => {
+    return (registryStocksQuery.data ?? []).map(toRegistryRailStock);
+  }, [registryStocksQuery.data]);
+
+  const railStocks = useMemo(() => {
+    const seen = new Set<string>();
+    const combined = [...archiveStocks, ...registryStocks];
+
+    return combined.filter((stock) => {
+      if (seen.has(stock.stock_code)) {
+        return false;
+      }
+      seen.add(stock.stock_code);
+      return true;
+    });
+  }, [archiveStocks, registryStocks]);
+
+  const marketStocks = useMemo(() => {
+    return railStocks.filter((item) => market === "ALL" || item.market === market);
+  }, [market, railStocks]);
+
   useEffect(() => {
-    if (!selectedCode && stocksQuery.data && stocksQuery.data.length > 0) {
-      setSelectedCode(stocksQuery.data[0].stock_code);
+    if (selectedCode) {
+      return;
     }
-  }, [selectedCode, stocksQuery.data]);
+
+    const nextCode = marketStocks[0]?.stock_code;
+    if (nextCode) {
+      setSelectedCode(nextCode);
+    }
+  }, [marketStocks, selectedCode]);
 
   const markets = useMemo(() => {
     const values = new Set<string>();
-    (stocksQuery.data ?? []).forEach((item) => {
+    railStocks.forEach((item) => {
       if (item.market) {
         values.add(item.market);
       }
     });
     return ["ALL", ...Array.from(values)];
-  }, [stocksQuery.data]);
+  }, [railStocks]);
 
   const visibleStocks = useMemo(() => {
-    const source = stocksQuery.data ?? [];
     const keyword = deferredSearch.trim().toLowerCase();
     if (!keyword) {
-      return source;
+      return marketStocks;
     }
 
-    return source.filter((item) => {
+    return marketStocks.filter((item) => {
       return (
         item.stock_code.toLowerCase().includes(keyword) ||
         item.stock_name.toLowerCase().includes(keyword) ||
-        (item.industry ?? "").toLowerCase().includes(keyword)
+        (item.industry ?? "").toLowerCase().includes(keyword) ||
+        String(item.dataset_count ?? "").includes(keyword) ||
+        (item.latest_report_date ?? "").toLowerCase().includes(keyword)
       );
     });
-  }, [deferredSearch, stocksQuery.data]);
+  }, [deferredSearch, marketStocks]);
 
   const selectedStock: StockInfo | undefined = useMemo(() => {
-    return (stocksQuery.data ?? []).find((item) => item.stock_code === selectedCode);
-  }, [selectedCode, stocksQuery.data]);
+    const registryMatch = registryStocksQuery.data?.find((item) => item.stock_code === selectedCode);
+    if (registryMatch) {
+      return registryMatch;
+    }
+
+    const archiveMatch = archiveWorkspacesQuery.data?.find((item) => item.stock_code === selectedCode);
+    if (archiveMatch) {
+      return {
+        stock_code: archiveMatch.stock_code,
+        stock_name: archiveMatch.stock_name,
+        market: archiveMatch.market,
+      };
+    }
+
+    if (selectedCode) {
+      return {
+        stock_code: selectedCode,
+        stock_name: selectedCode,
+      };
+    }
+
+    return undefined;
+  }, [archiveWorkspacesQuery.data, registryStocksQuery.data, selectedCode]);
+
+  const selectedWorkspace = useMemo(() => {
+    return archiveWorkspacesQuery.data?.find((item) => item.stock_code === selectedCode);
+  }, [archiveWorkspacesQuery.data, selectedCode]);
 
   const refreshStockMutation = useMutation({
     mutationFn: async () => {
@@ -207,7 +296,7 @@ export default function App() {
 
   const leftRail = (
     <div className="rail-stack">
-      <SectionCard title="Stock explorer" eyebrow="Registry">
+      <SectionCard title="Archive workspaces" eyebrow="Fast archive">
         <div className="control-stack">
           <label className="field">
             <span>Market</span>
@@ -240,17 +329,18 @@ export default function App() {
             <div className="inline-action">
               <input
                 value={manualCode}
-                onChange={(event) => setManualCode(event.target.value.trim())}
+                onChange={(event) => setManualCode(event.target.value)}
                 placeholder="e.g. 600519"
               />
               <button
                 type="button"
                 className="ghost-button"
                 onClick={() => {
-                  if (!manualCode) {
+                  const nextCode = manualCode.trim();
+                  if (!nextCode) {
                     return;
                   }
-                  setSelectedCode(manualCode);
+                  setSelectedCode(nextCode);
                   setSearch("");
                 }}
               >
@@ -300,21 +390,21 @@ export default function App() {
         </div>
       </SectionCard>
 
-      <SectionCard title="Selected stocks" eyebrow="Live feed">
-        {stocksQuery.isLoading ? (
-          <StateBlock title="Loading registry" description="Fetching the latest stock list." />
-        ) : stocksQuery.isError ? (
+      <SectionCard title="Selected stocks" eyebrow="Archive-first">
+        {archiveWorkspacesQuery.isLoading ? (
+          <StateBlock title="Loading archive" description="Fetching the latest workspace summaries." />
+        ) : archiveWorkspacesQuery.isError ? (
           <StateBlock
             tone="danger"
-            title="Registry unavailable"
-            description={(stocksQuery.error as Error).message}
+            title="Archive unavailable"
+            description={(archiveWorkspacesQuery.error as Error).message}
           />
         ) : (
           <div className="stock-list">
             {visibleStocks.length === 0 ? (
               <StateBlock
                 title="No matches"
-                description="Try a different search term or clear the filters."
+                description="Try a different search term, change the market filter, or enter a manual code."
               />
             ) : (
               visibleStocks.map((stock) => (
@@ -326,7 +416,11 @@ export default function App() {
                 >
                   <strong>{stock.stock_name}</strong>
                   <span>{stock.stock_code}</span>
-                  <em>{stock.market ?? "Unknown market"}</em>
+                  <em>
+                    {stock.source === "archive"
+                      ? `${stock.dataset_count ?? 0} datasets${stock.latest_report_date ? ` | ${stock.latest_report_date}` : ""}`
+                      : stock.industry ?? "Registry match"}
+                  </em>
                 </button>
               ))
             )}
@@ -345,8 +439,25 @@ export default function App() {
             value={(selectedStock?.stock_name ?? selectedCode) || "Nothing selected"}
             note={selectedStock?.stock_code ?? "Choose a company from the list"}
           />
-          <WorkspaceSummary label="Market" value={selectedStock?.market ?? "Unknown"} note={selectedStock?.industry ?? "Industry unavailable"} />
-          <WorkspaceSummary label="Listed" value={formatDate(selectedStock?.list_date)} note="Registry listing date" />
+          <WorkspaceSummary
+            label="Market"
+            value={selectedStock?.market ?? selectedWorkspace?.market ?? "Unknown"}
+            note={selectedStock?.industry ?? "Industry unavailable"}
+          />
+          <WorkspaceSummary
+            label="Archive"
+            value={selectedWorkspace?.dataset_count ?? 0}
+            note={
+              selectedWorkspace?.latest_report_date
+                ? `Latest report ${formatDate(selectedWorkspace.latest_report_date)}`
+                : "Archive summary"
+            }
+          />
+          <WorkspaceSummary
+            label="Listed"
+            value={formatDate(selectedStock?.list_date ?? selectedWorkspace?.latest_report_date)}
+            note={selectedStock?.list_date ? "Registry listing date" : "Latest archive report date"}
+          />
         </div>
       </SectionCard>
 
@@ -368,7 +479,11 @@ export default function App() {
           />
           <WorkspaceSummary
             label="Timestamp"
-            value={formatDateTime(jobQuery.data && typeof jobQuery.data === "object" && "updated_at" in jobQuery.data ? String((jobQuery.data as Record<string, unknown>).updated_at ?? "") : undefined)}
+            value={formatDateTime(
+              jobQuery.data && typeof jobQuery.data === "object" && "updated_at" in jobQuery.data
+                ? String((jobQuery.data as Record<string, unknown>).updated_at ?? "")
+                : undefined,
+            )}
             note="Latest poll time from the crawler API"
           />
         </div>
@@ -399,7 +514,7 @@ export default function App() {
           <span className="eyebrow">Selected stock</span>
           <h2>{selectedStock?.stock_name ?? selectedCode ?? "Choose a company"}</h2>
           <p>
-            {selectedStock?.stock_code ?? "—"} {selectedStock?.market ? ` / ${selectedStock.market}` : ""}
+            {selectedStock?.stock_code ?? "-"} {selectedStock?.market ? ` / ${selectedStock.market}` : ""}
             {selectedStock?.industry ? ` / ${selectedStock.industry}` : ""}
           </p>
         </div>

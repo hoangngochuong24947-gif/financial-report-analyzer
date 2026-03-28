@@ -40,6 +40,28 @@ type WorkspaceGetPath<Body> = {
 };
 
 type WorkspacePaths = ApiPaths & {
+  "/api/v2/workspaces": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: {
+      parameters: {
+        query?: {
+          limit?: number;
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      responses: {
+        200: WorkspaceJsonResponse<WorkspaceSummary[]>;
+        422: WorkspaceValidationResponse;
+      };
+    };
+  };
   "/api/v2/workspace/{code}/snapshot": WorkspaceGetPath<WorkspaceSnapshotResponse>;
   "/api/v2/workspace/{code}/metrics/catalog": WorkspaceGetPath<WorkspaceMetricCatalogResponse>;
   "/api/v2/workspace/{code}/metrics": WorkspaceGetPath<WorkspaceMetricValuesResponse>;
@@ -153,6 +175,36 @@ export interface WorkspaceAiInsightsContextResponse {
     model_summary: string;
     metric_digest: string;
   };
+}
+
+export interface WorkspaceArchiveItem {
+  stock_code: string;
+  stock_name: string;
+  market: string;
+  dataset: string;
+  fetched_at: string;
+  raw_path: string;
+  csv_path: string;
+  manifest_path: string;
+  row_count: number;
+  status: string;
+  report_date?: string | null;
+}
+
+export interface WorkspaceSummary {
+  stock_code: string;
+  stock_name: string;
+  market: string;
+  latest_report_date?: string | null;
+  dataset_count: number;
+  archives: WorkspaceArchiveItem[];
+}
+
+export async function listWorkspaces(limit = 20): Promise<WorkspaceSummary[]> {
+  const result = await workspaceClient.GET("/api/v2/workspaces", {
+    params: { query: { limit } },
+  });
+  return unwrapData("GET", "/api/v2/workspaces", result);
 }
 
 export async function getWorkspaceSnapshot(code: string): Promise<WorkspaceSnapshotResponse> {

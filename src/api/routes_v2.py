@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from src.api.dependencies import get_crawler_service
+from src.api.dependencies import get_crawler_service, get_workspace_service
 from src.crawler.interfaces import CrawlerDataNotFoundError, CrawlerDependencyError, Dataset
 from src.crawler.jobs import (
     enqueue_local_refresh_snapshot,
@@ -16,6 +16,7 @@ from src.crawler.jobs import (
 )
 from src.crawler.service import CrawlerService
 from src.models.stock_info import StockInfo
+from src.api.workspace_service import WorkspaceService
 from src.utils.logger import logger
 
 router = APIRouter(prefix="/api/v2", tags=["v2"])
@@ -48,8 +49,23 @@ async def list_stocks_v2(
     market: Optional[str] = Query(None, description="Market filter"),
     refresh: bool = Query(False, description="Force refresh stock list cache"),
     crawler: CrawlerService = Depends(get_crawler_service),
+    workspace_service: WorkspaceService = Depends(get_workspace_service),
 ):
     try:
+        if not refresh:
+            workspace_items = workspace_service.list_workspaces(limit=200)
+            if workspace_items:
+                filtered = [
+                    StockInfo(
+                        stock_code=item.stock_code,
+                        stock_name=item.stock_name,
+                        market=item.market,
+                    )
+                    for item in workspace_items
+                    if not market or item.market == market
+                ]
+                if filtered:
+                    return filtered
         return crawler.fetch_stock_list(market=market, refresh=refresh)
     except Exception as e:
         logger.error(f"v2 list stocks failed: {e}")

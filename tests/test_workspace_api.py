@@ -6,6 +6,15 @@ from src.main import app
 client = TestClient(app)
 
 
+def test_v2_stock_list_prefers_archive_workspace_summaries():
+    response = client.get("/api/v2/stocks")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload
+    assert any(item["stock_code"] == "601012" for item in payload)
+
+
 def test_workspace_snapshot_endpoint_uses_archive_data():
     response = client.get("/api/v2/workspace/601012/snapshot")
 
