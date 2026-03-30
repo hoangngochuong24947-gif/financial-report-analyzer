@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
@@ -99,6 +100,31 @@ class SnapshotResponse(BaseModel):
     updated_at: Optional[str] = Field(default=None, description="Latest archive fetch timestamp")
 
 
+class WorkspaceStatementRow(BaseModel):
+    field: str = Field(..., description="Stable field key")
+    label: str = Field(..., description="Display label")
+    value: str = Field(..., description="Raw serialized value")
+    display_value: str = Field(..., description="Human-friendly display value")
+    period: Optional[str] = Field(default=None, description="Reporting period")
+    source: str = Field(default="archive", description="Primary data source")
+
+
+class WorkspaceStatementTab(BaseModel):
+    key: str = Field(..., description="Stable statement key")
+    label: str = Field(..., description="Display label")
+    period: str = Field(..., description="Selected reporting period")
+    rows: list[WorkspaceStatementRow] = Field(default_factory=list, description="Normalized statement rows")
+
+
+class WorkspaceStatementsResponse(BaseModel):
+    stock: WorkspaceStockInfo = Field(..., description="Stock identity")
+    lang: str = Field(default="zh", description="Response language")
+    available_periods: list[str] = Field(default_factory=list, description="Available reporting periods")
+    selected_period: str = Field(..., description="Selected reporting period")
+    tabs: list[WorkspaceStatementTab] = Field(default_factory=list, description="Statement tabs")
+    source: str = Field(default="baidu_archive", description="Primary source")
+
+
 class MetricCatalogResponse(BaseModel):
     stock_code: str = Field(..., description="Stock code")
     stock_name: str = Field(..., description="Stock name")
@@ -151,3 +177,71 @@ class InsightContextResponse(BaseModel):
     report_date: str = Field(..., description="Latest report date")
     profile: ApiPromptProfile = Field(..., description="Prompt profile")
     injection_bundle: PromptInjectionBundle = Field(..., description="Structured prompt injection bundle")
+
+
+class WorkspaceInsightGenerateRequest(BaseModel):
+    period: Optional[str] = Field(default=None, description="Selected reporting period")
+    lang: str = Field(default="zh", description="Response language")
+
+
+class WorkspaceInsightEvidence(BaseModel):
+    key: str = Field(..., description="Evidence key")
+    label: str = Field(..., description="Evidence label")
+    value: str = Field(..., description="Evidence value")
+    period: Optional[str] = Field(default=None, description="Evidence period")
+    source: str = Field(default="archive", description="Primary source")
+
+
+class WorkspaceInsightResponse(BaseModel):
+    stock_code: str = Field(..., description="Stock code")
+    stock_name: str = Field(..., description="Stock name")
+    report_date: str = Field(..., description="Selected report date")
+    lang: str = Field(default="zh", description="Response language")
+    summary: str = Field(..., description="Short executive summary")
+    highlights: list[str] = Field(default_factory=list, description="Key highlights")
+    risks: list[str] = Field(default_factory=list, description="Key risks")
+    open_questions: list[str] = Field(default_factory=list, description="Open questions")
+    actions: list[str] = Field(default_factory=list, description="Recommended actions")
+    evidence: list[WorkspaceInsightEvidence] = Field(default_factory=list, description="Evidence citations")
+    generated_at: datetime = Field(..., description="Generation timestamp")
+    model_version: str = Field(default="workspace-insights-v1", description="Model version tag")
+
+
+class StatementDetailRow(BaseModel):
+    key: str = Field(..., description="Stable row key")
+    label: str = Field(..., description="Localized display label")
+    value: Any = Field(default=None, description="Raw value")
+    display_value: str = Field(default="", description="Formatted display value")
+    unit: str = Field(default="", description="Display unit")
+    source: str = Field(default="baidu_archive", description="Primary data source")
+    is_estimated: bool = Field(default=False, description="Whether value is estimated")
+
+
+class StatementDetailTab(BaseModel):
+    key: str = Field(..., description="Statement tab key")
+    title: str = Field(..., description="Localized tab title")
+    rows: list[StatementDetailRow] = Field(default_factory=list, description="Statement rows")
+
+
+class StatementDetailResponse(BaseModel):
+    stock: WorkspaceStockInfo = Field(..., description="Stock identity")
+    lang: str = Field(default="zh-CN", description="Display language")
+    available_periods: list[str] = Field(default_factory=list, description="Available periods across all statement sets")
+    selected_period: str = Field(..., description="Selected reporting period")
+    tabs: list[StatementDetailTab] = Field(default_factory=list, description="Statement tabs")
+    updated_at: Optional[str] = Field(default=None, description="Latest archive fetch timestamp")
+
+
+class InsightReportResponse(BaseModel):
+    stock_code: str = Field(..., description="Stock code")
+    stock_name: str = Field(..., description="Stock name")
+    report_date: str = Field(..., description="Selected report date")
+    lang: str = Field(default="zh-CN", description="Output language")
+    summary: str = Field(default="", description="Executive summary")
+    highlights: list[str] = Field(default_factory=list, description="Positive evidence points")
+    risks: list[str] = Field(default_factory=list, description="Risk points")
+    open_questions: list[str] = Field(default_factory=list, description="Follow-up questions")
+    actions: list[str] = Field(default_factory=list, description="Suggested actions")
+    evidence: list[str] = Field(default_factory=list, description="Evidence references")
+    generated_at: str = Field(..., description="Generation timestamp")
+    model_version: str = Field(default="workspace-insights-v1", description="Workspace insight contract version")

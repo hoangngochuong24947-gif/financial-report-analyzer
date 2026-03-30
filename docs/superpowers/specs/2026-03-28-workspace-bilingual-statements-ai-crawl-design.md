@@ -109,6 +109,14 @@ Each row contains:
 
 This contract lets the frontend render detail tables without reconstructing statement rows from snapshot fragments.
 
+#### Period Selection Rules
+
+- If `period` is omitted, the backend selects the latest period that exists in any statement set and returns it as `selected_period`.
+- If `period` is provided and exists in at least one of the three statement sets, the backend returns that period and allows tabs with missing coverage to render an empty-state row set.
+- If `period` is provided and exists in none of the statement sets, the endpoint returns `404`.
+- `available_periods` is the union of all statement periods in descending order.
+- Each tab is allowed to have different row availability for the same selected period; the frontend must not assume perfect cross-statement symmetry.
+
 ### AI Insight Generation
 
 Add a generation endpoint:
@@ -142,6 +150,12 @@ The endpoint uses:
 
 The model output must be normalized into this fixed structure even when the LLM response is imperfect.
 
+#### Legacy AI Route Compatibility
+
+- The existing legacy AI-report route remains untouched in this phase.
+- The new workspace-scoped generation endpoint is the only endpoint used by the workspace frontend.
+- Shared prompt-building and parsing utilities should be reused where practical, but the new endpoint owns the fixed structured response required by the workspace UI.
+
 ### Locale Handling
 
 Existing read endpoints that provide user-facing labels should accept optional `lang`. The first phase only needs to guarantee correct localization for:
@@ -149,7 +163,22 @@ Existing read endpoints that provide user-facing labels should accept optional `
 - shell text supplied by frontend dictionaries
 - metric catalog labels and descriptions
 - statement row labels
+- grouped metric labels and notes where display text is returned by backend
+- model card labels and summaries
+- insight context display text used by the insights page
 - AI insight output language
+
+To keep implementation bounded, the following workspace endpoints should accept optional `lang` in phase one:
+
+- `GET /api/v2/workspace/{code}/snapshot`
+- `GET /api/v2/workspace/{code}/statements`
+- `GET /api/v2/workspace/{code}/metrics/catalog`
+- `GET /api/v2/workspace/{code}/metrics`
+- `GET /api/v2/workspace/{code}/models`
+- `GET /api/v2/workspace/{code}/insights/context`
+- `POST /api/v2/workspace/{code}/insights/generate`
+
+Localization only applies to backend-supplied display text. Numeric values, keys, and structural identifiers remain locale-neutral.
 
 ## Data Flow
 

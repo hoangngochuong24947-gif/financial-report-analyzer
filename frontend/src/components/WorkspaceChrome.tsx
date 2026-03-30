@@ -7,6 +7,7 @@ export function WorkspaceChrome(props: {
   tabs: WorkspaceTab[];
   activeRoute: WorkspaceRoute;
   onNavigate: (route: WorkspaceRoute) => void;
+  controls?: ReactNode;
   leftRail: ReactNode;
   rightRail: ReactNode;
   children: ReactNode;
@@ -44,6 +45,8 @@ export function WorkspaceChrome(props: {
               ))}
             </div>
           </header>
+
+          {props.controls ? <div className="workspace-controls panel">{props.controls}</div> : null}
 
           <div className="workspace-canvas">{props.children}</div>
         </section>

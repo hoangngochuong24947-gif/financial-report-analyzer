@@ -1,139 +1,246 @@
-import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import type { StockInfo } from "../api/sdk";
-import { getWorkspaceAiInsightsContext } from "../api/workspace";
+import {
+  generateWorkspaceInsights,
+  getWorkspaceAiInsightsContext,
+  type WorkspaceInsightReportResponse,
+} from "../api/workspace";
 import { BulletList, CopyBlock, LoadingSkeleton, MetricGrid, SectionCard, StateBlock } from "../components/DataBlocks";
+import { formatDateTime } from "../lib/finance";
+import { getBrowserLocale, getWorkspaceCopy, type Lang } from "../lib/i18n";
 
 type InsightsPageProps = {
   selectedCode: string;
   selectedStock?: StockInfo;
+  lang: Lang;
 };
 
-export function InsightsPage({ selectedCode, selectedStock }: InsightsPageProps) {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function normalizeReport(data: unknown): WorkspaceInsightReportResponse | undefined {
+  if (!isRecord(data)) {
+    return undefined;
+  }
+
+  if (isRecord(data.report)) {
+    return data.report as WorkspaceInsightReportResponse;
+  }
+
+  if (isRecord(data.data)) {
+    return data.data as WorkspaceInsightReportResponse;
+  }
+
+  return data as WorkspaceInsightReportResponse;
+}
+
+function renderTextBlock(value: unknown): string {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.filter((item) => typeof item === "string").join("\n");
+  }
+
+  return "";
+}
+
+export function InsightsPage({ selectedCode, selectedStock, lang }: InsightsPageProps) {
+  const copy = getWorkspaceCopy(lang);
+  const locale = getBrowserLocale(lang);
+  const [generatedReport, setGeneratedReport] = useState<WorkspaceInsightReportResponse | undefined>();
+
   const contextQuery = useQuery({
-    queryKey: ["workspace-insights-context", selectedCode],
+    queryKey: ["workspace-insights-context", selectedCode, lang],
     enabled: Boolean(selectedCode),
-    queryFn: () => getWorkspaceAiInsightsContext(selectedCode),
+    queryFn: () => getWorkspaceAiInsightsContext(selectedCode, lang),
     staleTime: 30 * 60_000,
+  });
+
+  const generateMutation = useMutation({
+    mutationFn: async () => {
+      const result = await generateWorkspaceInsights(selectedCode, lang);
+      return normalizeReport(result);
+    },
+    onSuccess: (report) => {
+      if (report) {
+        setGeneratedReport(report);
+      }
+    },
   });
 
   const summaryItems = useMemo(
     () => [
       {
-        label: "Profile",
-        value: contextQuery.data?.profile.name ?? "Awaiting context",
-        note: contextQuery.data?.profile.key ?? "Prompt profile",
+        label: copy.insights.title,
+        value: contextQuery.data?.profile.name ?? copy.insights.noContext,
+        note: contextQuery.data?.profile.key ?? copy.insights.eyebrow,
       },
       {
-        label: "Report date",
-        value: contextQuery.data?.report_date ?? "Awaiting context",
-        note: "Financial period referenced by the insight bundle",
+        label: copy.insights.reportDate,
+        value: contextQuery.data?.report_date ?? copy.shared.unavailable,
+        note: contextQuery.data?.stock_name ?? selectedStock?.stock_name ?? selectedCode,
       },
       {
-        label: "Stock",
+        label: copy.shell.selectedCompany,
         value: selectedStock?.stock_name ?? contextQuery.data?.stock_name ?? selectedCode,
         note: selectedStock?.stock_code ?? selectedCode,
       },
     ],
-    [contextQuery.data, selectedCode, selectedStock],
+    [copy, contextQuery.data, selectedCode, selectedStock],
+  );
+
+  const report = generatedReport;
+  const reportSections = useMemo(
+    () =>
+      report
+        ? [
+            {
+              title: copy.insights.executiveSummary,
+              body: renderTextBlock(report.executive_summary),
+            },
+            {
+              title: "Profitability",
+              body: renderTextBlock(report.profitability_analysis),
+            },
+            {
+              title: "Solvency",
+              body: renderTextBlock(report.solvency_analysis),
+            },
+            {
+              title: "Efficiency",
+              body: renderTextBlock(report.efficiency_analysis),
+            },
+            {
+              title: "Cash flow",
+              body: renderTextBlock(report.cashflow_analysis),
+            },
+            {
+              title: "Trend",
+              body: renderTextBlock(report.trend_analysis),
+            },
+          ].filter((section) => section.body.length > 0)
+        : [],
+    [copy.insights.executiveSummary, report],
   );
 
   if (!selectedCode) {
     return (
-      <SectionCard title="Insights page" eyebrow="No stock selected">
-        <StateBlock
-          title="Pick a company to unlock the narrative"
-          description="The insights workspace becomes active once a company is selected."
-        />
+      <SectionCard title={copy.insights.title} eyebrow={copy.insights.eyebrow}>
+        <StateBlock title={copy.insights.noStock} description={copy.insights.description} />
       </SectionCard>
     );
   }
 
-  if (contextQuery.isError) {
-    const message = (contextQuery.error as Error | undefined)?.message ?? "Unable to load the insight context.";
-    return (
-      <SectionCard title="Insights page" eyebrow="Narrative unavailable">
-        <StateBlock tone="danger" title="Unable to load the AI context" description={message} />
-      </SectionCard>
-    );
-  }
-
-  if (contextQuery.isLoading) {
-    return (
-      <SectionCard title="Insights page" eyebrow="Preparing AI context">
-        <StateBlock
-          title="Assembling prompt injections"
-          description="The workspace is building a controlled prompt bundle from archive-backed evidence."
-          action={<LoadingSkeleton lines={4} />}
-        />
-      </SectionCard>
-    );
-  }
-
-  if (!contextQuery.data) {
-    return (
-      <SectionCard title="Insights page" eyebrow="No context yet">
-        <StateBlock
-          title="No insight context returned"
-          description="The backend did not return a prompt bundle for the selected stock."
-        />
-      </SectionCard>
-    );
-  }
-
-  const context = contextQuery.data;
+  const contextError = (contextQuery.error as Error | undefined)?.message;
 
   return (
     <div className="page-stack">
       <SectionCard
-        title={context.stock_name}
-        eyebrow="AI conclusion workspace"
-        action={<span className="section-meta">{context.profile.name}</span>}
+        title={selectedStock?.stock_name ?? contextQuery.data?.stock_name ?? selectedCode}
+        eyebrow={copy.insights.eyebrow}
+        action={
+          <button
+            type="button"
+            className="ghost-button"
+            onClick={() => generateMutation.mutate()}
+            disabled={generateMutation.isPending}
+          >
+            {generateMutation.isPending ? copy.insights.generating : copy.insights.generate}
+          </button>
+        }
       >
+        <div className="hero-copy">
+          <p>{copy.insights.description}</p>
+        </div>
+
         <MetricGrid items={summaryItems} />
       </SectionCard>
 
-      <SectionCard title="System prompt" eyebrow="Injected block">
-        <CopyBlock>
-          <p>{context.injection_bundle.system_prompt}</p>
-        </CopyBlock>
-      </SectionCard>
-
       <div className="two-up">
-        <SectionCard title="Company context" eyebrow="Injected block">
-          <CopyBlock>
-            <p>{context.injection_bundle.company_context}</p>
-          </CopyBlock>
+        <SectionCard title={copy.insights.promptBundle} eyebrow={copy.insights.eyebrow}>
+          {contextQuery.isLoading ? (
+            <LoadingSkeleton lines={5} />
+          ) : contextQuery.isError && !contextQuery.data ? (
+            <StateBlock tone="danger" title={copy.insights.contextUnavailable} description={contextError ?? copy.insights.contextUnavailable} />
+          ) : contextQuery.data ? (
+            <div className="copy-block">
+              <p>{contextQuery.data.injection_bundle.system_prompt}</p>
+              <p>{contextQuery.data.injection_bundle.company_context}</p>
+              <p>{contextQuery.data.injection_bundle.risk_overlay}</p>
+            </div>
+          ) : (
+            <StateBlock title={copy.insights.noContext} description={copy.insights.description} />
+          )}
         </SectionCard>
 
-        <SectionCard title="Risk overlay" eyebrow="Injected block">
-          <CopyBlock>
-            <p>{context.injection_bundle.risk_overlay}</p>
-          </CopyBlock>
+        <SectionCard title={copy.insights.output} eyebrow={copy.insights.eyebrow}>
+          {generateMutation.isPending ? (
+            <StateBlock
+              title={copy.insights.generating}
+              description="The backend is assembling a new AI report from the workspace evidence."
+            />
+          ) : report ? (
+            <div className="copy-block">
+              <p>
+                <strong>{copy.insights.executiveSummary}</strong>
+              </p>
+              <p>{renderTextBlock(report.executive_summary) || copy.insights.reportUnavailable}</p>
+              <p>
+                {copy.insights.generatedAt}: {formatDateTime(report.generated_at, locale)}
+              </p>
+              <p>
+                {copy.insights.reportDate}: {report.report_date ?? contextQuery.data?.report_date ?? copy.shared.unavailable}
+              </p>
+            </div>
+          ) : (
+            <StateBlock title={copy.insights.reportUnavailable} description={copy.insights.description} />
+          )}
         </SectionCard>
       </div>
 
-      <div className="two-up">
-        <SectionCard title="Metric digest" eyebrow="Injected block">
-          <CopyBlock>
-            <p>{context.injection_bundle.metric_digest}</p>
-          </CopyBlock>
-        </SectionCard>
+      {reportSections.length > 0 ? (
+        <div className="two-up">
+          {reportSections.map((section) => (
+            <SectionCard key={section.title} title={section.title} eyebrow={copy.insights.output}>
+              <CopyBlock>
+                <p>{section.body}</p>
+              </CopyBlock>
+            </SectionCard>
+          ))}
+        </div>
+      ) : null}
 
-        <SectionCard title="Model summary" eyebrow="Injected block">
-          <CopyBlock>
-            <p>{context.injection_bundle.model_summary}</p>
-          </CopyBlock>
-        </SectionCard>
-      </div>
+      {report?.strengths?.length || report?.weaknesses?.length || report?.recommendations?.length || report?.risk_warnings?.length ? (
+        <div className="two-up">
+          <SectionCard title={copy.insights.strengths} eyebrow={copy.insights.output}>
+            <BulletList items={report?.strengths} emptyLabel={copy.insights.reportUnavailable} tone="positive" />
+          </SectionCard>
+          <SectionCard title={copy.insights.weaknesses} eyebrow={copy.insights.output}>
+            <BulletList items={report?.weaknesses} emptyLabel={copy.insights.reportUnavailable} tone="warning" />
+          </SectionCard>
+          <SectionCard title={copy.insights.recommendations} eyebrow={copy.insights.output}>
+            <BulletList items={report?.recommendations} emptyLabel={copy.insights.reportUnavailable} tone="neutral" />
+          </SectionCard>
+          <SectionCard title={copy.insights.riskWarnings} eyebrow={copy.insights.output}>
+            <BulletList items={report?.risk_warnings} emptyLabel={copy.insights.reportUnavailable} tone="warning" />
+          </SectionCard>
+        </div>
+      ) : null}
 
-      <SectionCard title="Output contract" eyebrow="LLM structure">
-        <BulletList
-          items={context.profile.output_contract}
-          emptyLabel="No output contract returned yet."
-          tone="positive"
-        />
-      </SectionCard>
+      {contextQuery.data ? (
+        <SectionCard title={copy.shared.archiveSummary} eyebrow={copy.insights.eyebrow}>
+          <BulletList
+            items={contextQuery.data.profile.output_contract}
+            emptyLabel={copy.insights.noContext}
+            tone="positive"
+          />
+        </SectionCard>
+      ) : null}
     </div>
   );
 }
+

@@ -3,43 +3,44 @@ import { useQuery } from "@tanstack/react-query";
 import type { StockInfo } from "../api/sdk";
 import { getWorkspaceModelResults } from "../api/workspace";
 import { BulletList, LoadingSkeleton, MetricGrid, SectionCard, StateBlock } from "../components/DataBlocks";
+import { getWorkspaceCopy, type Lang } from "../lib/i18n";
 
 type ModelsPageProps = {
   selectedCode: string;
   selectedStock?: StockInfo;
+  lang: Lang;
 };
 
-export function ModelsPage({ selectedCode, selectedStock }: ModelsPageProps) {
+export function ModelsPage({ selectedCode, selectedStock, lang }: ModelsPageProps) {
+  const copy = getWorkspaceCopy(lang);
+
   const modelsQuery = useQuery({
-    queryKey: ["workspace-models", selectedCode],
+    queryKey: ["workspace-models", selectedCode, lang],
     enabled: Boolean(selectedCode),
-    queryFn: () => getWorkspaceModelResults(selectedCode),
+    queryFn: () => getWorkspaceModelResults(selectedCode, lang),
   });
 
   const headlineItems = useMemo(() => {
     return (modelsQuery.data?.items ?? []).slice(0, 4).map((item) => ({
       label: item.label,
       value: item.verdict.toUpperCase(),
-      note: item.score ? `Score ${item.score}` : "Model card",
+      note: item.score ? `Score ${item.score}` : copy.models.lenses,
     }));
-  }, [modelsQuery.data?.items]);
+  }, [copy.models.lenses, modelsQuery.data?.items]);
 
   if (!selectedCode) {
     return (
-      <SectionCard title="Models page" eyebrow="No stock selected">
-        <StateBlock
-          title="Pick a company to begin"
-          description="The model view becomes active once the left rail selection is set."
-        />
+      <SectionCard title={copy.models.title} eyebrow={copy.models.eyebrow}>
+        <StateBlock title={copy.models.noStock} description={copy.models.description} />
       </SectionCard>
     );
   }
 
   if (modelsQuery.isError) {
-    const message = (modelsQuery.error as Error | undefined)?.message ?? "Unable to load the model cards.";
+    const message = (modelsQuery.error as Error | undefined)?.message ?? copy.models.dataUnavailable;
     return (
-      <SectionCard title="Models page" eyebrow="Data unavailable">
-        <StateBlock tone="danger" title="Unable to load model data" description={message} />
+      <SectionCard title={copy.models.title} eyebrow={copy.models.eyebrow}>
+        <StateBlock tone="danger" title={copy.models.dataUnavailable} description={message} />
       </SectionCard>
     );
   }
@@ -47,9 +48,9 @@ export function ModelsPage({ selectedCode, selectedStock }: ModelsPageProps) {
   return (
     <div className="page-stack">
       <SectionCard
-        title="Analysis models"
-        eyebrow={selectedStock?.stock_name ?? modelsQuery.data?.stock_name ?? selectedCode}
-        action={<span className="section-meta">Five fixed finance lenses</span>}
+        title={selectedStock?.stock_name ?? modelsQuery.data?.stock_name ?? selectedCode}
+        eyebrow={copy.models.eyebrow}
+        action={<span className="section-meta">{copy.models.lenses}</span>}
       >
         {modelsQuery.isLoading ? (
           <LoadingSkeleton lines={4} />
@@ -72,7 +73,7 @@ export function ModelsPage({ selectedCode, selectedStock }: ModelsPageProps) {
               <p>{item.summary}</p>
               <BulletList
                 items={item.evidence_keys.map((evidenceKey) => `Evidence: ${evidenceKey}`)}
-                emptyLabel="No evidence keys attached yet."
+                emptyLabel={copy.models.dataUnavailable}
                 tone={item.verdict === "weak" || item.verdict === "high" ? "warning" : "neutral"}
               />
             </div>
@@ -82,3 +83,4 @@ export function ModelsPage({ selectedCode, selectedStock }: ModelsPageProps) {
     </div>
   );
 }
+

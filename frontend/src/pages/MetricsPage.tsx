@@ -1,97 +1,101 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { StockInfo } from "../api/sdk";
-import {
-  getWorkspaceMetricCatalog,
-  getWorkspaceMetricValues,
-  getWorkspaceSnapshot,
-} from "../api/workspace";
+import { getWorkspaceMetricCatalog, getWorkspaceMetricValues, getWorkspaceSnapshot } from "../api/workspace";
 import { DataTable, LoadingSkeleton, MetricGrid, SectionCard, StateBlock } from "../components/DataBlocks";
 import { formatDate, formatDateTime, getStatementRows } from "../lib/finance";
+import { getBrowserLocale, getWorkspaceCopy, type Lang } from "../lib/i18n";
 
 type MetricsPageProps = {
   selectedCode: string;
   selectedStock?: StockInfo;
+  lang: Lang;
+  onOpenStatementDetail: () => void;
 };
 
-export function MetricsPage({ selectedCode, selectedStock }: MetricsPageProps) {
+export function MetricsPage({ selectedCode, selectedStock, lang, onOpenStatementDetail }: MetricsPageProps) {
+  const copy = getWorkspaceCopy(lang);
+  const locale = getBrowserLocale(lang);
+
   const snapshotQuery = useQuery({
-    queryKey: ["workspace-snapshot", selectedCode],
+    queryKey: ["workspace-snapshot", selectedCode, lang],
     enabled: Boolean(selectedCode),
-    queryFn: () => getWorkspaceSnapshot(selectedCode),
+    queryFn: () => getWorkspaceSnapshot(selectedCode, lang),
+    staleTime: 60_000,
   });
 
   const catalogQuery = useQuery({
-    queryKey: ["workspace-metric-catalog", selectedCode],
+    queryKey: ["workspace-metric-catalog", selectedCode, lang],
     enabled: Boolean(selectedCode),
-    queryFn: () => getWorkspaceMetricCatalog(selectedCode),
+    queryFn: () => getWorkspaceMetricCatalog(selectedCode, lang),
   });
 
   const metricsQuery = useQuery({
-    queryKey: ["workspace-metric-values", selectedCode],
+    queryKey: ["workspace-metric-values", selectedCode, lang],
     enabled: Boolean(selectedCode),
-    queryFn: () => getWorkspaceMetricValues(selectedCode),
+    queryFn: () => getWorkspaceMetricValues(selectedCode, lang),
   });
 
   const summaryItems = useMemo(
     () => [
       {
-        label: "Company",
-        value: selectedStock?.stock_name ?? snapshotQuery.data?.stock.stock_name ?? "Awaiting selection",
-        note: selectedStock?.stock_code ?? (selectedCode || "Choose a stock from the rail"),
+        label: copy.shell.selectedCompany,
+        value: selectedStock?.stock_name ?? snapshotQuery.data?.stock.stock_name ?? copy.shared.chooseStock,
+        note: selectedStock?.stock_code ?? (selectedCode || copy.shared.chooseStock),
       },
       {
-        label: "Market",
-        value: selectedStock?.market ?? snapshotQuery.data?.stock.market ?? "Unknown",
-        note: selectedStock?.industry ?? "Industry unavailable",
+        label: copy.shell.market,
+        value: selectedStock?.market ?? snapshotQuery.data?.stock.market ?? copy.shared.unavailable,
+        note: selectedStock?.industry ?? copy.shared.unavailable,
       },
       {
-        label: "Listed",
-        value: formatDate(selectedStock?.list_date),
-        note: "Listing date from the stock registry",
+        label: copy.shared.registryListing,
+        value: formatDate(selectedStock?.list_date, locale),
+        note: selectedStock?.list_date ? copy.shared.registryListing : copy.shared.unavailable,
       },
       {
-        label: "Archive refresh",
-        value: formatDateTime(snapshotQuery.data?.updated_at),
-        note: snapshotQuery.data?.source ?? "Baidu archive feed",
+        label: copy.metrics.archiveRefresh,
+        value: formatDateTime(snapshotQuery.data?.updated_at, locale),
+        note: snapshotQuery.data?.source ?? copy.metrics.snapshotSource,
       },
     ],
-    [selectedCode, selectedStock, snapshotQuery.data],
+    [copy, locale, selectedCode, selectedStock, snapshotQuery.data],
   );
 
   const categorySummary = useMemo(() => {
     const categories = metricsQuery.data?.categories ?? {};
     return [
       {
-        label: "Catalog size",
+        label: copy.metrics.catalogSize,
         value: String(catalogQuery.data?.total ?? 0),
-        note: "Registered metrics in the workspace catalog",
+        note: copy.metrics.metricCatalogTitle,
       },
       {
-        label: "Profitability",
+        label: copy.metrics.profitability,
         value: String(categories.profitability?.length ?? 0),
-        note: "Profitability metrics currently exposed",
+        note: copy.metrics.metricDigestTitle,
       },
       {
-        label: "Cashflow",
+        label: copy.metrics.cashflow,
         value: String(categories.cashflow?.length ?? 0),
-        note: "Cash-based evidence block",
+        note: copy.metrics.statementPreviewHint,
       },
       {
-        label: "Trend",
+        label: copy.metrics.trend,
         value: String(categories.trend?.length ?? 0),
-        note: "Growth and directional metrics",
+        note: copy.metrics.description,
       },
     ];
-  }, [catalogQuery.data?.total, metricsQuery.data?.categories]);
+  }, [catalogQuery.data?.total, copy, metricsQuery.data?.categories]);
+
+  const balanceRows = getStatementRows(snapshotQuery.data, "balance_sheet");
+  const incomeRows = getStatementRows(snapshotQuery.data, "income_statement");
+  const cashflowRows = getStatementRows(snapshotQuery.data, "cashflow_statement");
 
   if (!selectedCode) {
     return (
-      <SectionCard title="Metrics page" eyebrow="No stock selected">
-        <StateBlock
-          title="Pick a company to begin"
-          description="Use the left rail to choose a stock code or search a company name."
-        />
+      <SectionCard title={copy.metrics.title} eyebrow={copy.metrics.eyebrow}>
+        <StateBlock title={copy.metrics.noStock} description={copy.shell.selectedCompanyHint} />
       </SectionCard>
     );
   }
@@ -101,32 +105,24 @@ export function MetricsPage({ selectedCode, selectedStock }: MetricsPageProps) {
       (snapshotQuery.error as Error | undefined)?.message ??
       (catalogQuery.error as Error | undefined)?.message ??
       (metricsQuery.error as Error | undefined)?.message ??
-      "Unable to load the workspace metrics view.";
+      copy.metrics.dataUnavailable;
 
     return (
-      <SectionCard title="Metrics page" eyebrow="Data unavailable">
-        <StateBlock tone="danger" title="Unable to load metrics" description={message} />
+      <SectionCard title={copy.metrics.title} eyebrow={copy.metrics.eyebrow}>
+        <StateBlock tone="danger" title={copy.metrics.dataUnavailable} description={message} />
       </SectionCard>
     );
   }
-
-  const balanceRows = getStatementRows(snapshotQuery.data, "balance_sheet");
-  const incomeRows = getStatementRows(snapshotQuery.data, "income_statement");
-  const cashflowRows = getStatementRows(snapshotQuery.data, "cashflow_statement");
 
   return (
     <div className="page-stack">
       <SectionCard
         title={selectedStock?.stock_name ?? snapshotQuery.data?.stock.stock_name ?? selectedCode}
-        eyebrow="Metrics workspace"
-        action={<span className="section-meta">Code {selectedCode}</span>}
+        eyebrow={copy.metrics.eyebrow}
+        action={<button type="button" className="ghost-button" onClick={onOpenStatementDetail}>{copy.metrics.openDetail}</button>}
       >
         <div className="hero-copy">
-          <p>
-            Archive-first financial statements and the first wave of reusable metrics now live in
-            one workspace. This page is the dense, evidence-first view for raw statements and
-            grouped indicators.
-          </p>
+          <p>{copy.metrics.description}</p>
         </div>
 
         <MetricGrid items={summaryItems} />
@@ -134,64 +130,44 @@ export function MetricsPage({ selectedCode, selectedStock }: MetricsPageProps) {
 
       <div className="two-up">
         <SectionCard
-          title="Balance sheet"
-          eyebrow="Archive snapshot"
-          action={<span className="section-meta">{balanceRows.length} fields</span>}
+          title={copy.metrics.statementPreviewTitle}
+          eyebrow={copy.metrics.overviewTitle}
+          action={<span className="section-meta">{copy.metrics.statementPreviewHint}</span>}
         >
           {snapshotQuery.isLoading ? (
             <LoadingSkeleton lines={5} />
           ) : (
-            <DataTable rows={balanceRows} emptyLabel="No balance sheet rows were returned yet." />
+            <div className="statement-preview-stack">
+              <DataTable rows={balanceRows.slice(0, 6)} emptyLabel={copy.metrics.noData} />
+              <DataTable rows={incomeRows.slice(0, 6)} emptyLabel={copy.metrics.noData} />
+              <DataTable rows={cashflowRows.slice(0, 6)} emptyLabel={copy.metrics.noData} />
+            </div>
           )}
         </SectionCard>
 
-        <SectionCard
-          title="Income statement"
-          eyebrow="Archive snapshot"
-          action={<span className="section-meta">{incomeRows.length} fields</span>}
-        >
-          {snapshotQuery.isLoading ? (
-            <LoadingSkeleton lines={5} />
-          ) : (
-            <DataTable rows={incomeRows} emptyLabel="No income statement rows were returned yet." />
-          )}
-        </SectionCard>
-      </div>
-
-      <SectionCard
-        title="Cash flow statement"
-        eyebrow="Archive snapshot"
-        action={<span className="section-meta">{cashflowRows.length} fields</span>}
-      >
-        {snapshotQuery.isLoading ? (
-          <LoadingSkeleton lines={6} />
-        ) : (
-          <DataTable rows={cashflowRows} emptyLabel="No cash flow rows were returned yet." />
-        )}
-      </SectionCard>
-
-      <div className="two-up">
-        <SectionCard title="Metric catalog" eyebrow="Workspace registry">
+        <SectionCard title={copy.metrics.metricCatalogTitle} eyebrow={copy.metrics.overviewTitle}>
           {catalogQuery.isLoading ? (
             <LoadingSkeleton lines={4} />
           ) : (
             <MetricGrid items={categorySummary} />
           )}
         </SectionCard>
-
-        <SectionCard title="Metric digest" eyebrow="Narrative lead">
-          {metricsQuery.isLoading ? (
-            <LoadingSkeleton lines={4} />
-          ) : (
-            <div className="copy-block">
-              <p>{metricsQuery.data?.summary ?? "No metric summary returned yet."}</p>
-              <p>
-                Available periods: {(snapshotQuery.data?.available_periods ?? []).slice(0, 3).join(", ") || "No periods available"}.
-              </p>
-            </div>
-          )}
-        </SectionCard>
       </div>
+
+      <SectionCard title={copy.metrics.metricDigestTitle} eyebrow={copy.metrics.overviewTitle}>
+        {metricsQuery.isLoading ? (
+          <LoadingSkeleton lines={4} />
+        ) : (
+          <div className="copy-block">
+            <p>{metricsQuery.data?.summary ?? copy.metrics.noData}</p>
+            <p>
+              {copy.metrics.availablePeriods}:{" "}
+              {(snapshotQuery.data?.available_periods ?? []).slice(0, 3).join(", ") || copy.metrics.noData}.
+            </p>
+          </div>
+        )}
+      </SectionCard>
     </div>
   );
 }
+

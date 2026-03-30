@@ -1,6 +1,7 @@
 import { apiClient } from "./client";
 import type { Client } from "openapi-fetch";
 import type { paths as ApiPaths } from "./generated/schema";
+import type { Lang } from "../lib/i18n";
 
 type ApiError = { detail?: string } | unknown;
 
@@ -18,6 +19,10 @@ type WorkspaceValidationResponse = {
   };
 };
 
+type WorkspaceQuery = {
+  lang?: string;
+};
+
 type WorkspaceGetPath<Body> = {
   parameters: {
     query?: never;
@@ -27,11 +32,33 @@ type WorkspaceGetPath<Body> = {
   };
   get: {
     parameters: {
-      query?: Record<string, unknown>;
+      query?: WorkspaceQuery & Record<string, unknown>;
       header?: never;
       path: { code: string };
       cookie?: never;
     };
+    responses: {
+      200: WorkspaceJsonResponse<Body>;
+      422: WorkspaceValidationResponse;
+    };
+  };
+};
+
+type WorkspacePostPath<Body> = {
+  parameters: {
+    query?: never;
+    header?: never;
+    path?: never;
+    cookie?: never;
+  };
+  post: {
+    parameters: {
+      query?: WorkspaceQuery & Record<string, unknown>;
+      header?: never;
+      path: { code: string };
+      cookie?: never;
+    };
+    requestBody?: never;
     responses: {
       200: WorkspaceJsonResponse<Body>;
       422: WorkspaceValidationResponse;
@@ -49,7 +76,7 @@ type WorkspacePaths = ApiPaths & {
     };
     get: {
       parameters: {
-        query?: {
+        query?: WorkspaceQuery & {
           limit?: number;
         };
         header?: never;
@@ -67,6 +94,8 @@ type WorkspacePaths = ApiPaths & {
   "/api/v2/workspace/{code}/metrics": WorkspaceGetPath<WorkspaceMetricValuesResponse>;
   "/api/v2/workspace/{code}/models": WorkspaceGetPath<WorkspaceModelResultsResponse>;
   "/api/v2/workspace/{code}/insights/context": WorkspaceGetPath<WorkspaceAiInsightsContextResponse>;
+  "/api/v2/workspace/{code}/statements": WorkspaceGetPath<WorkspaceStatementsResponse>;
+  "/api/v2/workspace/{code}/insights/generate": WorkspacePostPath<WorkspaceInsightReportResponse>;
 };
 
 type WorkspaceClient = Client<WorkspacePaths>;
@@ -90,6 +119,10 @@ function unwrapData<T>(method: string, path: string, result: { data?: T; error?:
   return result.data;
 }
 
+function hasData<T>(result: { data?: T; error?: ApiError }): result is { data: T; error?: never } {
+  return Boolean(result.data) && !result.error;
+}
+
 export type WorkspaceStatementRows = Array<Record<string, unknown>>;
 
 export interface WorkspaceSnapshotResponse {
@@ -106,6 +139,23 @@ export interface WorkspaceSnapshotResponse {
   };
   source: string;
   updated_at?: string;
+}
+
+export interface WorkspaceStatementsResponse {
+  stock_code?: string;
+  stock_name?: string;
+  report_date?: string;
+  updated_at?: string;
+  source?: string;
+  available_periods?: string[];
+  statements?: {
+    balance_sheet?: WorkspaceStatementRows;
+    income_statement?: WorkspaceStatementRows;
+    cashflow_statement?: WorkspaceStatementRows;
+  };
+  balance_sheet?: WorkspaceStatementRows;
+  income_statement?: WorkspaceStatementRows;
+  cashflow_statement?: WorkspaceStatementRows;
 }
 
 export interface WorkspaceMetricCatalogItem {
@@ -177,6 +227,32 @@ export interface WorkspaceAiInsightsContextResponse {
   };
 }
 
+export interface WorkspaceInsightSection {
+  title?: string;
+  label?: string;
+  content?: string;
+  items?: string[];
+}
+
+export interface WorkspaceInsightReportResponse {
+  stock_code?: string;
+  stock_name?: string;
+  report_date?: string;
+  generated_at?: string;
+  executive_summary?: string;
+  profitability_analysis?: string;
+  solvency_analysis?: string;
+  efficiency_analysis?: string;
+  cashflow_analysis?: string;
+  trend_analysis?: string;
+  strengths?: string[];
+  weaknesses?: string[];
+  recommendations?: string[];
+  risk_warnings?: string[];
+  sections?: WorkspaceInsightSection[];
+  [key: string]: unknown;
+}
+
 export interface WorkspaceArchiveItem {
   stock_code: string;
   stock_name: string;
@@ -200,44 +276,94 @@ export interface WorkspaceSummary {
   archives: WorkspaceArchiveItem[];
 }
 
-export async function listWorkspaces(limit = 20): Promise<WorkspaceSummary[]> {
+export async function listWorkspaces(limit = 20, lang?: Lang): Promise<WorkspaceSummary[]> {
   const result = await workspaceClient.GET("/api/v2/workspaces", {
-    params: { query: { limit } },
+    params: { query: { limit, lang } },
   });
   return unwrapData("GET", "/api/v2/workspaces", result);
 }
 
-export async function getWorkspaceSnapshot(code: string): Promise<WorkspaceSnapshotResponse> {
+export async function getWorkspaceSnapshot(code: string, lang?: Lang): Promise<WorkspaceSnapshotResponse> {
   const result = await workspaceClient.GET("/api/v2/workspace/{code}/snapshot", {
-    params: { path: { code } },
+    params: { path: { code }, query: { lang } },
   });
   return unwrapData("GET", "/api/v2/workspace/{code}/snapshot", result);
 }
 
-export async function getWorkspaceMetricCatalog(code: string): Promise<WorkspaceMetricCatalogResponse> {
+export async function getWorkspaceMetricCatalog(code: string, lang?: Lang): Promise<WorkspaceMetricCatalogResponse> {
   const result = await workspaceClient.GET("/api/v2/workspace/{code}/metrics/catalog", {
-    params: { path: { code } },
+    params: { path: { code }, query: { lang } },
   });
   return unwrapData("GET", "/api/v2/workspace/{code}/metrics/catalog", result);
 }
 
-export async function getWorkspaceMetricValues(code: string): Promise<WorkspaceMetricValuesResponse> {
+export async function getWorkspaceMetricValues(code: string, lang?: Lang): Promise<WorkspaceMetricValuesResponse> {
   const result = await workspaceClient.GET("/api/v2/workspace/{code}/metrics", {
-    params: { path: { code } },
+    params: { path: { code }, query: { lang } },
   });
   return unwrapData("GET", "/api/v2/workspace/{code}/metrics", result);
 }
 
-export async function getWorkspaceModelResults(code: string): Promise<WorkspaceModelResultsResponse> {
+export async function getWorkspaceModelResults(code: string, lang?: Lang): Promise<WorkspaceModelResultsResponse> {
   const result = await workspaceClient.GET("/api/v2/workspace/{code}/models", {
-    params: { path: { code } },
+    params: { path: { code }, query: { lang } },
   });
   return unwrapData("GET", "/api/v2/workspace/{code}/models", result);
 }
 
-export async function getWorkspaceAiInsightsContext(code: string): Promise<WorkspaceAiInsightsContextResponse> {
+export async function getWorkspaceAiInsightsContext(code: string, lang?: Lang): Promise<WorkspaceAiInsightsContextResponse> {
   const result = await workspaceClient.GET("/api/v2/workspace/{code}/insights/context", {
-    params: { path: { code } },
+    params: { path: { code }, query: { lang } },
   });
   return unwrapData("GET", "/api/v2/workspace/{code}/insights/context", result);
+}
+
+export async function getWorkspaceStatements(code: string, lang?: Lang): Promise<WorkspaceStatementsResponse> {
+  const result = await workspaceClient.GET("/api/v2/workspace/{code}/statements", {
+    params: { path: { code }, query: { lang } },
+  });
+  return unwrapData("GET", "/api/v2/workspace/{code}/statements", result);
+}
+
+export async function generateWorkspaceInsights(
+  code: string,
+  lang?: Lang,
+): Promise<WorkspaceInsightReportResponse> {
+  const result = await workspaceClient.POST("/api/v2/workspace/{code}/insights/generate", {
+    params: { path: { code }, query: { lang } },
+  });
+  return unwrapData("POST", "/api/v2/workspace/{code}/insights/generate", result);
+}
+
+export function hasWorkspaceStatements(data: WorkspaceStatementsResponse | undefined): boolean {
+  return Boolean(
+    data &&
+      ((Array.isArray(data.balance_sheet) && data.balance_sheet.length > 0) ||
+        (Array.isArray(data.income_statement) && data.income_statement.length > 0) ||
+        (Array.isArray(data.cashflow_statement) && data.cashflow_statement.length > 0) ||
+        (Array.isArray(data.statements?.balance_sheet) && data.statements.balance_sheet.length > 0) ||
+        (Array.isArray(data.statements?.income_statement) && data.statements.income_statement.length > 0) ||
+        (Array.isArray(data.statements?.cashflow_statement) && data.statements.cashflow_statement.length > 0)),
+  );
+}
+
+export function resolveWorkspaceStatements(
+  data: WorkspaceStatementsResponse | undefined,
+): WorkspaceStatementsResponse | undefined {
+  if (!data) {
+    return undefined;
+  }
+
+  if (data.statements) {
+    return data;
+  }
+
+  return {
+    ...data,
+    statements: {
+      balance_sheet: data.balance_sheet ?? [],
+      income_statement: data.income_statement ?? [],
+      cashflow_statement: data.cashflow_statement ?? [],
+    },
+  };
 }
