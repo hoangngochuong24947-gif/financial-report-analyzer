@@ -1,22 +1,32 @@
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import Dict, List
+from typing import Callable, Dict, List
 
+from src.analyzer.risk_models import build_cashflow_risk, build_leverage_risk, build_liquidity_risk
+from src.analyzer.valuation_models import build_valuation_snapshot, build_value_trap
 from src.models.workspace_metrics import AnalysisModelItem
 
 
 class WorkspaceModelEngine:
     """Build fixed financial analysis model cards from metric evidence."""
 
-    def build_items(self, metric_values: Dict[str, Decimal]) -> List[AnalysisModelItem]:
-        return [
-            self._dupont(metric_values),
-            self._cashflow_quality(metric_values),
-            self._growth_quality(metric_values),
-            self._solvency_pressure(metric_values),
-            self._operating_efficiency(metric_values),
+    def __init__(self) -> None:
+        self._builders: List[Callable[[Dict[str, Decimal]], AnalysisModelItem]] = [
+            self._dupont,
+            self._cashflow_quality,
+            self._growth_quality,
+            self._solvency_pressure,
+            self._operating_efficiency,
+            build_liquidity_risk,
+            build_leverage_risk,
+            build_cashflow_risk,
+            build_valuation_snapshot,
+            build_value_trap,
         ]
+
+    def build_items(self, metric_values: Dict[str, Decimal]) -> List[AnalysisModelItem]:
+        return [builder(metric_values) for builder in self._builders]
 
     def _dupont(self, metrics: Dict[str, Decimal]) -> AnalysisModelItem:
         roe = metrics.get("roe", Decimal("0"))

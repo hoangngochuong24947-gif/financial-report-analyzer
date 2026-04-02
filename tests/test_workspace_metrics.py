@@ -69,3 +69,63 @@ def test_workspace_metric_engine_builds_catalog_and_values_from_archive_snapshot
     assert values["current_ratio"] == "2.0000"
     assert values["free_cash_flow"] == "800.00"
     assert values["net_income_yoy"] == "0.2000"
+
+
+def test_workspace_metric_engine_extracts_risk_and_valuation_metrics_from_indicator_snapshot():
+    from src.analyzer.metric_engine import WorkspaceMetricEngine
+
+    snapshot = FinancialSnapshot(
+        stock_code="000001",
+        balance_sheets=[
+            BalanceSheet(
+                stock_code="000001",
+                report_date=date(2025, 9, 30),
+                total_current_assets=Decimal("1000"),
+                total_non_current_assets=Decimal("2000"),
+                total_assets=Decimal("3000"),
+                total_current_liabilities=Decimal("500"),
+                total_non_current_liabilities=Decimal("500"),
+                total_liabilities=Decimal("1000"),
+                total_equity=Decimal("2000"),
+            )
+        ],
+        income_statements=[
+            IncomeStatement(
+                stock_code="000001",
+                report_date=date(2025, 9, 30),
+                total_revenue=Decimal("5000"),
+                operating_cost=Decimal("3000"),
+                operating_profit=Decimal("1500"),
+                total_profit=Decimal("1600"),
+                net_income=Decimal("1200"),
+            )
+        ],
+        cashflow_statements=[
+            CashFlowStatement(
+                stock_code="000001",
+                report_date=date(2025, 9, 30),
+                operating_cashflow=Decimal("1500"),
+                investing_cashflow=Decimal("-700"),
+                financing_cashflow=Decimal("200"),
+                net_cashflow=Decimal("1000"),
+            )
+        ],
+    )
+
+    bundle = WorkspaceMetricEngine().build_bundle(
+        snapshot=snapshot,
+        stock_name="测试公司",
+        indicator_snapshot={
+            "市盈率(TTM)": "18.5",
+            "市净率": "3.2",
+            "市销率": "4.1",
+        },
+    )
+
+    values = {item.key: item.value for item in bundle.values}
+    assert values["accrual_ratio"] == "-0.1000"
+    assert values["liability_to_ocf"] == "0.6667"
+    assert values["fcf_to_debt"] == "0.8000"
+    assert values["pe_ttm"] == "18.5000"
+    assert values["pb_ratio"] == "3.2000"
+    assert values["earnings_yield"] == "0.0541"

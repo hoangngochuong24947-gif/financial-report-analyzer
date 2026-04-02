@@ -5,9 +5,8 @@ import io
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
-from src.analyzer.dupont_analyzer import analyze as dupont_analyze
-from src.analyzer.ratio_calculator import calc_efficiency, calc_profitability, calc_solvency
-from src.api.dependencies import get_crawler_service
+from src.api.analysis_facade import AnalysisFacade
+from src.api.dependencies import get_analysis_facade, get_crawler_service
 from src.crawler.interfaces import CrawlerDataNotFoundError
 from src.crawler.service import CrawlerService
 from src.export.excel_exporter import ExcelExporter
@@ -42,31 +41,24 @@ async def generate_ai_report(
 async def export_excel_report(
     code: str,
     stock_name: str = "",
-    crawler: CrawlerService = Depends(get_crawler_service),
+    facade: AnalysisFacade = Depends(get_analysis_facade),
 ):
     try:
         logger.info(f"API: Exporting Excel for {code}")
-
-        snapshot = crawler.get_snapshot(code)
-        bs = snapshot.balance_sheets[0]
-        is_ = snapshot.income_statements[0]
-
-        profitability = calc_profitability(bs, is_)
-        solvency = calc_solvency(bs)
-        efficiency = calc_efficiency(bs, is_)
-        dupont = dupont_analyze(bs, is_)
+        export_payload = await facade.get_export_payload(code)
+        snapshot = export_payload["snapshot"]
 
         exporter = ExcelExporter()
         excel_bytes = exporter.export_full_report(
             stock_code=code,
-            stock_name=stock_name or code,
+            stock_name=stock_name or export_payload["stock_name"] or code,
             balance_sheets=snapshot.balance_sheets,
             income_statements=snapshot.income_statements,
             cashflow_statements=snapshot.cashflow_statements,
-            profitability=profitability,
-            solvency=solvency,
-            efficiency=efficiency,
-            dupont=dupont,
+            profitability=export_payload["profitability"],
+            solvency=export_payload["solvency"],
+            efficiency=export_payload["efficiency"],
+            dupont=export_payload["dupont"],
         )
 
         file_name = f"{stock_name or code}_financial_report.xlsx"

@@ -61,11 +61,13 @@ def test_workspace_models_endpoint_returns_analysis_cards():
     assert response.status_code == 200
     payload = response.json()
     assert payload["stock_code"] == "601012"
-    assert len(payload["items"]) >= 5
+    assert len(payload["items"]) >= 10
     keys = {item["key"] for item in payload["items"]}
     assert "dupont" in keys
     assert "cashflow_quality" in keys
     assert "solvency_pressure" in keys
+    assert "liquidity_risk" in keys
+    assert "valuation_snapshot" in keys
 
 
 def test_workspace_insight_context_endpoint_returns_prompt_injection_bundle():

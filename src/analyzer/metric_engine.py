@@ -43,6 +43,14 @@ class WorkspaceMetricEngine:
         MetricCatalogItem(key="revenue_yoy", label="Revenue YoY", group="trend", description="Year-over-year growth in revenue.", unit="ratio"),
         MetricCatalogItem(key="operating_profit_yoy", label="Operating Profit YoY", group="trend", description="Year-over-year growth in operating profit.", unit="ratio"),
         MetricCatalogItem(key="operating_cashflow_yoy", label="Operating Cash Flow YoY", group="trend", description="Year-over-year growth in operating cash flow.", unit="ratio"),
+        MetricCatalogItem(key="accrual_ratio", label="Accrual Ratio", group="risk", description="Net income minus operating cash flow divided by total assets.", unit="ratio"),
+        MetricCatalogItem(key="liability_to_ocf", label="Liability to OCF", group="risk", description="Total liabilities divided by operating cash flow.", unit="ratio"),
+        MetricCatalogItem(key="fcf_to_debt", label="FCF to Debt", group="risk", description="Free cash flow divided by total liabilities.", unit="ratio"),
+        MetricCatalogItem(key="pe_ttm", label="PE TTM", group="valuation", description="Trailing twelve month price-to-earnings ratio.", unit="ratio"),
+        MetricCatalogItem(key="pb_ratio", label="PB Ratio", group="valuation", description="Price-to-book ratio.", unit="ratio"),
+        MetricCatalogItem(key="ps_ratio", label="PS Ratio", group="valuation", description="Price-to-sales ratio.", unit="ratio"),
+        MetricCatalogItem(key="earnings_yield", label="Earnings Yield", group="valuation", description="Inverse of PE TTM.", unit="ratio"),
+        MetricCatalogItem(key="book_to_price", label="Book to Price", group="valuation", description="Inverse of PB ratio.", unit="ratio"),
         MetricCatalogItem(key="total_assets", label="Total Assets", group="capital", description="Latest total assets.", unit="amount"),
         MetricCatalogItem(key="total_liabilities", label="Total Liabilities", group="capital", description="Latest total liabilities.", unit="amount"),
         MetricCatalogItem(key="total_equity", label="Total Equity", group="capital", description="Latest total equity.", unit="amount"),
@@ -102,6 +110,20 @@ class WorkspaceMetricEngine:
             secondary=indicator_snapshot.get("roa"),
             derived=safe_divide(net_income, total_assets),
         )
+        pe_ttm = self._indicator_ratio(
+            indicator_snapshot,
+            ("pe_ttm", "pettm", "市盈率ttm", "市盈率", "pe"),
+        )
+        pb_ratio = self._indicator_ratio(
+            indicator_snapshot,
+            ("pb_ratio", "pbratio", "市净率", "pb"),
+        )
+        ps_ratio = self._indicator_ratio(
+            indicator_snapshot,
+            ("ps_ratio", "psratio", "市销率", "ps"),
+        )
+        operating_cashflow = cashflow.operating_cashflow if cashflow else Decimal("0")
+        free_cash_flow = cashflow.free_cash_flow if cashflow else Decimal("0")
 
         raw_values: Dict[str, Decimal] = {
             "roe": roe,
@@ -120,11 +142,11 @@ class WorkspaceMetricEngine:
             "equity_multiplier": safe_divide(total_assets, total_equity),
             "revenue_to_equity": safe_divide(income_statement.total_revenue, total_equity),
             "current_asset_turnover": safe_divide(income_statement.total_revenue, balance_sheet.total_current_assets),
-            "operating_cashflow": cashflow.operating_cashflow if cashflow else Decimal("0"),
-            "free_cash_flow": cashflow.free_cash_flow if cashflow else Decimal("0"),
-            "cash_to_profit_ratio": safe_divide(cashflow.operating_cashflow, net_income) if cashflow else Decimal("0"),
+            "operating_cashflow": operating_cashflow,
+            "free_cash_flow": free_cash_flow,
+            "cash_to_profit_ratio": safe_divide(operating_cashflow, net_income) if cashflow else Decimal("0"),
             "operating_cashflow_margin": safe_divide(
-                cashflow.operating_cashflow if cashflow else Decimal("0"),
+                operating_cashflow,
                 income_statement.total_revenue,
             ),
             "net_cashflow": cashflow_statement.net_cashflow if cashflow_statement else Decimal("0"),
@@ -138,6 +160,14 @@ class WorkspaceMetricEngine:
                 if cashflow_statement and previous_cashflow
                 else Decimal("0")
             ),
+            "accrual_ratio": safe_divide(net_income - operating_cashflow, total_assets),
+            "liability_to_ocf": safe_divide(total_liabilities, operating_cashflow),
+            "fcf_to_debt": safe_divide(free_cash_flow, total_liabilities),
+            "pe_ttm": pe_ttm,
+            "pb_ratio": pb_ratio,
+            "ps_ratio": ps_ratio,
+            "earnings_yield": safe_divide(Decimal("1"), pe_ttm) if pe_ttm > 0 else Decimal("0"),
+            "book_to_price": safe_divide(Decimal("1"), pb_ratio) if pb_ratio > 0 else Decimal("0"),
             "total_assets": total_assets,
             "total_liabilities": total_liabilities,
             "total_equity": total_equity,
@@ -217,6 +247,22 @@ class WorkspaceMetricEngine:
             return derived.quantize(Decimal("0.0001"))
 
         return Decimal("0.0000")
+
+    @classmethod
+    def _indicator_ratio(cls, indicator_snapshot: Dict[str, Any], aliases: tuple[str, ...]) -> Decimal:
+        normalized_aliases = tuple(cls._normalize_key(alias) for alias in aliases)
+        for key, value in indicator_snapshot.items():
+            normalized_key = cls._normalize_key(str(key))
+            if any(alias in normalized_key for alias in normalized_aliases):
+                try:
+                    return Decimal(str(value)).quantize(Decimal("0.0001"))
+                except Exception:
+                    continue
+        return Decimal("0.0000")
+
+    @staticmethod
+    def _normalize_key(value: str) -> str:
+        return "".join(ch for ch in value.lower() if ch.isalnum())
 
     @staticmethod
     def _build_summary(stock_code: str, stock_name: str, values: Dict[str, Decimal]) -> str:
