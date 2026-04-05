@@ -4,9 +4,10 @@ import json
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List
+from typing import Any, Dict, List
 
 from src.crawler.interfaces import Dataset, FinancialSnapshot
+from src.crawler.providers.baidu_finance.extractors import parse_report_date
 from src.crawler.providers.baidu_finance.parsers import (
     parse_balance_sheets,
     parse_cashflow_statements,
@@ -22,6 +23,7 @@ class ArchiveWorkspace:
     stock_name: str
     market: str
     snapshot: FinancialSnapshot
+    statement_details: Dict[str, Dict[str, List[Dict[str, object]]]]
     indicator_snapshot: Dict[str, object]
     archives: List[WorkspaceArchiveItem]
     latest_report_date: str | None
@@ -41,7 +43,8 @@ class WorkspaceRepository:
 
         stock_name = archive_items[0].stock_name
         market = archive_items[0].market
-        stock_snapshot = self._load_snapshot(archive_items)
+        dataset_payloads = self._load_dataset_payloads(archive_items)
+        stock_snapshot = self._load_snapshot(stock_code, dataset_payloads)
         latest_report_date = None
         if stock_snapshot.balance_sheets:
             latest_report_date = str(stock_snapshot.balance_sheets[0].report_date)
@@ -53,7 +56,8 @@ class WorkspaceRepository:
             stock_name=stock_name,
             market=market,
             snapshot=stock_snapshot,
-            indicator_snapshot=self._load_indicator_snapshot(archive_items),
+            statement_details=self._load_statement_details(dataset_payloads),
+            indicator_snapshot=self._load_indicator_snapshot(archive_items, dataset_payloads),
             archives=archive_items,
             latest_report_date=latest_report_date,
         )
@@ -103,22 +107,24 @@ class WorkspaceRepository:
         archive_items.sort(key=lambda item: item.fetched_at, reverse=True)
         return archive_items
 
-    def _load_snapshot(self, archive_items: List[WorkspaceArchiveItem]) -> FinancialSnapshot:
+    def _load_dataset_payloads(self, archive_items: List[WorkspaceArchiveItem]) -> Dict[str, Dict[str, object]]:
         payloads: Dict[str, Dict[str, object]] = {}
         for item in archive_items:
             if item.dataset not in payloads:
                 payloads[item.dataset] = self._read_raw_payload(item.raw_path)
+        return payloads
 
+    def _load_snapshot(self, stock_code: str, payloads: Dict[str, Dict[str, object]]) -> FinancialSnapshot:
         income_statements = parse_income_statements(
-            archive_items[0].stock_code,
+            stock_code,
             payloads.get(Dataset.INCOME_STATEMENT.value, {}).get("Result", {}),
         )
         balance_sheets = parse_balance_sheets(
-            archive_items[0].stock_code,
+            stock_code,
             payloads.get(Dataset.BALANCE_SHEET.value, {}).get("Result", {}),
         )
         cashflow_statements = parse_cashflow_statements(
-            archive_items[0].stock_code,
+            stock_code,
             payloads.get(Dataset.CASHFLOW_STATEMENT.value, {}).get("Result", {}),
         )
 
@@ -127,18 +133,38 @@ class WorkspaceRepository:
         cashflow_statements.sort(key=lambda item: item.report_date, reverse=True)
 
         return FinancialSnapshot(
-            stock_code=archive_items[0].stock_code,
+            stock_code=stock_code,
             balance_sheets=balance_sheets,
             income_statements=income_statements,
             cashflow_statements=cashflow_statements,
         )
 
-    def _load_indicator_snapshot(self, archive_items: List[WorkspaceArchiveItem]) -> Dict[str, object]:
+    def _load_statement_details(
+        self,
+        payloads: Dict[str, Dict[str, object]],
+    ) -> Dict[str, Dict[str, List[Dict[str, object]]]]:
+        return {
+            Dataset.BALANCE_SHEET.value: self._extract_statement_details(
+                payloads.get(Dataset.BALANCE_SHEET.value, {}).get("Result", {})
+            ),
+            Dataset.INCOME_STATEMENT.value: self._extract_statement_details(
+                payloads.get(Dataset.INCOME_STATEMENT.value, {}).get("Result", {})
+            ),
+            Dataset.CASHFLOW_STATEMENT.value: self._extract_statement_details(
+                payloads.get(Dataset.CASHFLOW_STATEMENT.value, {}).get("Result", {})
+            ),
+        }
+
+    def _load_indicator_snapshot(
+        self,
+        archive_items: List[WorkspaceArchiveItem],
+        payloads: Dict[str, Dict[str, object]],
+    ) -> Dict[str, object]:
         for item in archive_items:
             if item.dataset != Dataset.FINANCIAL_INDICATORS.value:
                 continue
 
-            payload = self._read_raw_payload(item.raw_path)
+            payload = payloads.get(item.dataset) or self._read_raw_payload(item.raw_path)
             latest = payload.get("latest")
             if isinstance(latest, dict):
                 return latest
@@ -153,6 +179,71 @@ class WorkspaceRepository:
                     return indicator_snapshot
 
         return {}
+
+    @staticmethod
+    def _extract_statement_details(result: Dict[str, Any]) -> Dict[str, List[Dict[str, object]]]:
+        details: Dict[str, List[Dict[str, object]]] = {}
+        for block in result.get("data", []):
+            report_label = str(block.get("text", "")).strip()
+            report_date = parse_report_date(report_label)
+            if report_date is None:
+                continue
+
+            rows: List[Dict[str, object]] = []
+            row_index = 0
+            for content in block.get("content", []):
+                section_name = str(content.get("name", "")).strip() or None
+                for item in content.get("data", []):
+                    header = item.get("header") or []
+                    if header:
+                        extracted = WorkspaceRepository._build_statement_row(
+                            row_index=row_index,
+                            section_name=section_name,
+                            raw_item=header,
+                        )
+                        if extracted is not None:
+                            rows.append(extracted)
+                            row_index += 1
+
+                    for body in item.get("body", []):
+                        extracted = WorkspaceRepository._build_statement_row(
+                            row_index=row_index,
+                            section_name=section_name,
+                            raw_item=body,
+                        )
+                        if extracted is not None:
+                            rows.append(extracted)
+                            row_index += 1
+
+            details[report_date.isoformat()] = rows
+        return details
+
+    @staticmethod
+    def _build_statement_row(
+        row_index: int,
+        section_name: str | None,
+        raw_item: List[object],
+    ) -> Dict[str, object] | None:
+        if not raw_item:
+            return None
+
+        label = str(raw_item[0]).strip() if raw_item[0] is not None else ""
+        if not label:
+            return None
+
+        value = raw_item[2] if len(raw_item) > 2 else None
+        display_value = "" if value is None else str(value).strip()
+        row_key_prefix = section_name or "statement"
+        return {
+            "key": f"{row_key_prefix}:{label}:{row_index}",
+            "label": label,
+            "section": section_name,
+            "value": value,
+            "display_value": display_value,
+            "unit": "",
+            "source": "baidu_archive",
+            "is_estimated": False,
+        }
 
     def _read_raw_payload(self, raw_path: str) -> Dict[str, object]:
         path = Path(raw_path)

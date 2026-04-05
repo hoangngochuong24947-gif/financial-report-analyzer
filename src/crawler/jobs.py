@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from src.config.settings import settings
 from src.crawler.interfaces import CrawlerDependencyError
+from src.crawler.providers.baidu_finance_provider import BaiduFinanceProvider
 from src.crawler.service import CrawlerService
 from src.utils.logger import logger
 
@@ -37,7 +38,7 @@ def _get_queue() -> "Queue":
 
 
 def run_refresh_snapshot(stock_code: str) -> Dict[str, Any]:
-    service = CrawlerService()
+    service = CrawlerService(provider=BaiduFinanceProvider())
     snapshot = service.refresh_snapshot(stock_code)
     return {
         "stock_code": stock_code,

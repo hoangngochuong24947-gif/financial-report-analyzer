@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { formatValue, toTitle } from "../lib/finance";
+import { formatValue, getMetricDisplayLabel, toTitle } from "../lib/finance";
 
 export function SectionCard(props: {
   title: string;
@@ -66,9 +66,26 @@ export function MetricGrid(props: {
   );
 }
 
+export function WorkspaceSummaryList(props: {
+  items: Array<{ label: string; value: ReactNode; note?: string }>;
+}) {
+  return (
+    <div className="summary-stack">
+      {props.items.map((item) => (
+        <article key={item.label} className="summary-card">
+          <span>{item.label}</span>
+          <strong>{item.value}</strong>
+          {item.note ? <p>{item.note}</p> : null}
+        </article>
+      ))}
+    </div>
+  );
+}
+
 export function DataTable(props: {
   rows: Array<[string, unknown]>;
   emptyLabel: string;
+  locale?: string;
 }) {
   if (props.rows.length === 0) {
     return <StateBlock title="Nothing to show yet" description={props.emptyLabel} />;
@@ -81,7 +98,52 @@ export function DataTable(props: {
           {props.rows.map(([key, value]) => (
             <tr key={key}>
               <th>{toTitle(key)}</th>
-              <td>{formatValue(value)}</td>
+              <td>{formatValue(value, props.locale)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+export function MetricTable(props: {
+  items: Array<{
+    key: string;
+    label: string;
+    value: string;
+    period?: string | null;
+    source?: string;
+    note?: string | null;
+  }>;
+  emptyLabel: string;
+  locale?: string;
+  lang?: "zh" | "en";
+}) {
+  if (props.items.length === 0) {
+    return <StateBlock title="Nothing to show yet" description={props.emptyLabel} />;
+  }
+
+  return (
+    <div className="analysis-table-wrap">
+      <table className="analysis-table">
+        <thead>
+          <tr>
+            <th>{props.lang === "zh" ? "指标" : "Metric"}</th>
+            <th>{props.lang === "zh" ? "数值" : "Value"}</th>
+            <th>{props.lang === "zh" ? "报告期" : "Period"}</th>
+            <th>{props.lang === "zh" ? "来源" : "Source"}</th>
+            <th>{props.lang === "zh" ? "备注" : "Note"}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {props.items.map((item) => (
+            <tr key={item.key}>
+              <th>{getMetricDisplayLabel(item.key, item.label, props.lang ?? "en")}</th>
+              <td>{formatValue(item.value, props.locale)}</td>
+              <td>{item.period ?? "-"}</td>
+              <td>{item.source ?? "-"}</td>
+              <td>{item.note ?? "-"}</td>
             </tr>
           ))}
         </tbody>

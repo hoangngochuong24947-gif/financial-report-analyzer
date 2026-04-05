@@ -1,9 +1,9 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { StockInfo } from "../api/sdk";
 import { getWorkspaceMetricCatalog, getWorkspaceMetricValues, getWorkspaceSnapshot } from "../api/workspace";
-import { DataTable, LoadingSkeleton, MetricGrid, SectionCard, StateBlock } from "../components/DataBlocks";
-import { formatDate, formatDateTime, getStatementRows } from "../lib/finance";
+import { DataTable, LoadingSkeleton, MetricGrid, MetricTable, SectionCard, StateBlock } from "../components/DataBlocks";
+import { formatDate, formatDateTime, getMetricDisplayLabel, getStatementRows } from "../lib/finance";
 import { getBrowserLocale, getWorkspaceCopy, type Lang } from "../lib/i18n";
 
 type MetricsPageProps = {
@@ -16,6 +16,7 @@ type MetricsPageProps = {
 export function MetricsPage({ selectedCode, selectedStock, lang, onOpenStatementDetail }: MetricsPageProps) {
   const copy = getWorkspaceCopy(lang);
   const locale = getBrowserLocale(lang);
+  const [activeGroup, setActiveGroup] = useState<string>("");
 
   const snapshotQuery = useQuery({
     queryKey: ["workspace-snapshot", selectedCode, lang],
@@ -88,9 +89,18 @@ export function MetricsPage({ selectedCode, selectedStock, lang, onOpenStatement
     ];
   }, [catalogQuery.data?.total, copy, metricsQuery.data?.categories]);
 
+  const categoryEntries = useMemo(() => Object.entries(metricsQuery.data?.categories ?? {}), [metricsQuery.data?.categories]);
+
+  useEffect(() => {
+    if (!activeGroup && categoryEntries.length > 0) {
+      setActiveGroup(categoryEntries[0][0]);
+    }
+  }, [activeGroup, categoryEntries]);
+
   const balanceRows = getStatementRows(snapshotQuery.data, "balance_sheet");
   const incomeRows = getStatementRows(snapshotQuery.data, "income_statement");
   const cashflowRows = getStatementRows(snapshotQuery.data, "cashflow_statement");
+  const activeMetricItems = metricsQuery.data?.categories?.[activeGroup] ?? categoryEntries[0]?.[1] ?? [];
 
   if (!selectedCode) {
     return (
@@ -119,7 +129,11 @@ export function MetricsPage({ selectedCode, selectedStock, lang, onOpenStatement
       <SectionCard
         title={selectedStock?.stock_name ?? snapshotQuery.data?.stock.stock_name ?? selectedCode}
         eyebrow={copy.metrics.eyebrow}
-        action={<button type="button" className="ghost-button" onClick={onOpenStatementDetail}>{copy.metrics.openDetail}</button>}
+        action={
+          <button type="button" className="ghost-button" onClick={onOpenStatementDetail}>
+            {copy.metrics.openDetail}
+          </button>
+        }
       >
         <div className="hero-copy">
           <p>{copy.metrics.description}</p>
@@ -128,46 +142,97 @@ export function MetricsPage({ selectedCode, selectedStock, lang, onOpenStatement
         <MetricGrid items={summaryItems} />
       </SectionCard>
 
+      <SectionCard
+        title={copy.metrics.statementPreviewTitle}
+        eyebrow={copy.metrics.overviewTitle}
+        action={<span className="section-meta">{copy.metrics.statementPreviewHint}</span>}
+      >
+        {snapshotQuery.isLoading ? (
+          <LoadingSkeleton lines={6} />
+        ) : (
+          <div className="statement-panel-grid">
+            <article className="statement-preview-panel">
+              <div className="statement-preview-head">
+                <h3>{copy.statements.balanceSheet}</h3>
+                <button type="button" className="ghost-button" onClick={onOpenStatementDetail}>
+                  {copy.shell.openStatements}
+                </button>
+              </div>
+              <DataTable rows={balanceRows.slice(0, 6)} emptyLabel={copy.metrics.noData} locale={locale} />
+            </article>
+
+            <article className="statement-preview-panel">
+              <div className="statement-preview-head">
+                <h3>{copy.statements.incomeStatement}</h3>
+                <button type="button" className="ghost-button" onClick={onOpenStatementDetail}>
+                  {copy.shell.openStatements}
+                </button>
+              </div>
+              <DataTable rows={incomeRows.slice(0, 6)} emptyLabel={copy.metrics.noData} locale={locale} />
+            </article>
+
+            <article className="statement-preview-panel">
+              <div className="statement-preview-head">
+                <h3>{copy.statements.cashflowStatement}</h3>
+                <button type="button" className="ghost-button" onClick={onOpenStatementDetail}>
+                  {copy.shell.openStatements}
+                </button>
+              </div>
+              <DataTable rows={cashflowRows.slice(0, 6)} emptyLabel={copy.metrics.noData} locale={locale} />
+            </article>
+          </div>
+        )}
+      </SectionCard>
+
       <div className="two-up">
-        <SectionCard
-          title={copy.metrics.statementPreviewTitle}
-          eyebrow={copy.metrics.overviewTitle}
-          action={<span className="section-meta">{copy.metrics.statementPreviewHint}</span>}
-        >
-          {snapshotQuery.isLoading ? (
-            <LoadingSkeleton lines={5} />
-          ) : (
-            <div className="statement-preview-stack">
-              <DataTable rows={balanceRows.slice(0, 6)} emptyLabel={copy.metrics.noData} />
-              <DataTable rows={incomeRows.slice(0, 6)} emptyLabel={copy.metrics.noData} />
-              <DataTable rows={cashflowRows.slice(0, 6)} emptyLabel={copy.metrics.noData} />
-            </div>
-          )}
+        <SectionCard title={copy.metrics.metricCatalogTitle} eyebrow={copy.metrics.overviewTitle}>
+          {catalogQuery.isLoading ? <LoadingSkeleton lines={4} /> : <MetricGrid items={categorySummary} />}
         </SectionCard>
 
-        <SectionCard title={copy.metrics.metricCatalogTitle} eyebrow={copy.metrics.overviewTitle}>
-          {catalogQuery.isLoading ? (
+        <SectionCard title={copy.metrics.metricDigestTitle} eyebrow={copy.metrics.overviewTitle}>
+          {metricsQuery.isLoading ? (
             <LoadingSkeleton lines={4} />
           ) : (
-            <MetricGrid items={categorySummary} />
+            <div className="copy-block">
+              <p>{metricsQuery.data?.summary ?? copy.metrics.noData}</p>
+              <p>
+                {copy.metrics.availablePeriods}:{" "}
+                {(snapshotQuery.data?.available_periods ?? []).slice(0, 4).join(", ") || copy.metrics.noData}.
+              </p>
+            </div>
           )}
         </SectionCard>
       </div>
 
-      <SectionCard title={copy.metrics.metricDigestTitle} eyebrow={copy.metrics.overviewTitle}>
+      <SectionCard title={copy.metrics.metricDigestTitle} eyebrow={copy.metrics.metricCatalogTitle}>
         {metricsQuery.isLoading ? (
-          <LoadingSkeleton lines={4} />
-        ) : (
-          <div className="copy-block">
-            <p>{metricsQuery.data?.summary ?? copy.metrics.noData}</p>
-            <p>
-              {copy.metrics.availablePeriods}:{" "}
-              {(snapshotQuery.data?.available_periods ?? []).slice(0, 3).join(", ") || copy.metrics.noData}.
-            </p>
+          <LoadingSkeleton lines={5} />
+        ) : categoryEntries.length > 0 ? (
+          <div className="metric-detail-stack">
+            <div className="metric-group-switcher">
+              {categoryEntries.map(([groupKey, items]) => (
+                <button
+                  key={groupKey}
+                  type="button"
+                  className={`metric-group-chip ${groupKey === activeGroup ? "metric-group-chip-active" : ""}`}
+                  onClick={() => setActiveGroup(groupKey)}
+                >
+                  <strong>{getMetricDisplayLabel(groupKey, groupKey, lang)}</strong>
+                  <span>{items.length}</span>
+                </button>
+              ))}
+            </div>
+            <MetricTable
+              items={activeMetricItems}
+              emptyLabel={copy.metrics.noData}
+              locale={locale}
+              lang={lang}
+            />
           </div>
+        ) : (
+          <StateBlock title={copy.metrics.noData} description={copy.metrics.dataUnavailable} />
         )}
       </SectionCard>
     </div>
   );
 }
-

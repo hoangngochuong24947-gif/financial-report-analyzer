@@ -210,6 +210,7 @@ class WorkspaceInsightResponse(BaseModel):
 class StatementDetailRow(BaseModel):
     key: str = Field(..., description="Stable row key")
     label: str = Field(..., description="Localized display label")
+    section: Optional[str] = Field(default=None, description="Logical statement section label")
     value: Any = Field(default=None, description="Raw value")
     display_value: str = Field(default="", description="Formatted display value")
     unit: str = Field(default="", description="Display unit")

@@ -4,9 +4,11 @@ import type { WorkspaceRoute, WorkspaceTab } from "../lib/routing";
 export function WorkspaceChrome(props: {
   title: string;
   subtitle: string;
+  eyebrow?: string;
   tabs: WorkspaceTab[];
   activeRoute: WorkspaceRoute;
   onNavigate: (route: WorkspaceRoute) => void;
+  tabsLabel?: string;
   controls?: ReactNode;
   leftRail: ReactNode;
   rightRail: ReactNode;
@@ -24,12 +26,12 @@ export function WorkspaceChrome(props: {
         <section className="workspace-main">
           <header className="workspace-masthead panel">
             <div className="masthead-copy">
-              <span className="eyebrow">A-share intelligence workspace</span>
+              <span className="eyebrow">{props.eyebrow ?? props.title}</span>
               <h1>{props.title}</h1>
               <p>{props.subtitle}</p>
             </div>
 
-            <div className="route-tabs" role="tablist" aria-label="Workspace pages">
+            <div className="route-tabs" role="tablist" aria-label={props.tabsLabel ?? "Workspace pages"}>
               {props.tabs.map((tab) => (
                 <button
                   key={tab.route}

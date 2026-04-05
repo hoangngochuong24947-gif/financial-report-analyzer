@@ -148,6 +148,14 @@ export interface WorkspaceStatementsResponse {
   updated_at?: string;
   source?: string;
   available_periods?: string[];
+  selected_period?: string;
+  lang?: string;
+  stock?: {
+    stock_code: string;
+    stock_name: string;
+    market: string;
+  };
+  tabs?: StatementDetailTab[];
   statements?: {
     balance_sheet?: WorkspaceStatementRows;
     income_statement?: WorkspaceStatementRows;
@@ -156,6 +164,27 @@ export interface WorkspaceStatementsResponse {
   balance_sheet?: WorkspaceStatementRows;
   income_statement?: WorkspaceStatementRows;
   cashflow_statement?: WorkspaceStatementRows;
+}
+
+export interface StatementDetailRow {
+  field?: string;
+  key: string;
+  label: string;
+  section?: string | null;
+  value: unknown;
+  display_value?: string;
+  unit?: string;
+  source?: string;
+  period?: string | null;
+  is_estimated?: boolean;
+}
+
+export interface StatementDetailTab {
+  key: string;
+  title?: string;
+  label?: string;
+  period?: string;
+  rows: StatementDetailRow[];
 }
 
 export interface WorkspaceMetricCatalogItem {
@@ -318,9 +347,13 @@ export async function getWorkspaceAiInsightsContext(code: string, lang?: Lang): 
   return unwrapData("GET", "/api/v2/workspace/{code}/insights/context", result);
 }
 
-export async function getWorkspaceStatements(code: string, lang?: Lang): Promise<WorkspaceStatementsResponse> {
+export async function getWorkspaceStatements(
+  code: string,
+  lang?: Lang,
+  period?: string,
+): Promise<WorkspaceStatementsResponse> {
   const result = await workspaceClient.GET("/api/v2/workspace/{code}/statements", {
-    params: { path: { code }, query: { lang } },
+    params: { path: { code }, query: { lang, period } },
   });
   return unwrapData("GET", "/api/v2/workspace/{code}/statements", result);
 }

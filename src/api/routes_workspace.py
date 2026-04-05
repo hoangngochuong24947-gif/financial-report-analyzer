@@ -40,6 +40,7 @@ def _build_statement_payload(detail: Any, stock_code: str) -> dict[str, Any]:
             {
                 "field": row.key,
                 "label": row.label,
+                "section": row.section,
                 "value": row.value,
                 "display_value": row.display_value,
                 "unit": row.unit,

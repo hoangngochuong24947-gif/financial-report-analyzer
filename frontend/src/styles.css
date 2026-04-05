@@ -98,7 +98,7 @@ a {
 .shell-glow {
   border-radius: 50%;
   filter: blur(90px);
-  opacity: 0.78;
+  opacity: 0.48;
 }
 
 .shell-glow-a {
@@ -119,7 +119,7 @@ a {
 
 .shell-noise {
   inset: 0;
-  opacity: 0.08;
+  opacity: 0.04;
   background-image: repeating-linear-gradient(135deg, rgba(23, 21, 19, 0.04), rgba(23, 21, 19, 0.04) 1px, transparent 1px, transparent 6px);
 }
 
@@ -257,6 +257,23 @@ a {
   min-width: 0;
 }
 
+.workspace-toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-end;
+}
+
+.toolbar-cluster {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-end;
+}
+
+.toolbar-cluster-right {
+  margin-left: auto;
+}
+
 .workspace-header {
   display: flex;
   justify-content: space-between;
@@ -330,6 +347,12 @@ a {
   gap: 1rem;
 }
 
+.statement-panel-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
 .card {
   padding: 1.25rem;
 }
@@ -378,6 +401,12 @@ a {
   white-space: nowrap;
 }
 
+.statement-header-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-end;
+}
+
 .control-stack {
   display: grid;
   gap: 0.95rem;
@@ -386,6 +415,10 @@ a {
 .field {
   display: grid;
   gap: 0.45rem;
+}
+
+.field-inline {
+  min-width: 14rem;
 }
 
 .field input,
@@ -550,6 +583,45 @@ a {
   gap: 0.75rem;
 }
 
+.metric-detail-stack {
+  display: grid;
+  gap: 1rem;
+}
+
+.metric-group-switcher {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.75rem;
+}
+
+.metric-group-chip {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 0.95rem;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.62);
+  cursor: pointer;
+}
+
+.metric-group-chip strong {
+  font-family: "Source Serif 4", Georgia, serif;
+  font-size: 0.98rem;
+}
+
+.metric-group-chip span {
+  font-family: "IBM Plex Mono", monospace;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.metric-group-chip-active {
+  border-color: rgba(123, 75, 55, 0.48);
+  background: linear-gradient(140deg, rgba(123, 75, 55, 0.1), rgba(255, 255, 255, 0.88));
+}
+
 .metric-tile {
   padding: 0.95rem 1rem;
   border-radius: 18px;
@@ -577,6 +649,27 @@ a {
   border-radius: 18px;
 }
 
+.statement-preview-panel {
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.54);
+}
+
+.statement-preview-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.statement-preview-head h3 {
+  margin: 0;
+  font-family: "Source Serif 4", Georgia, serif;
+  font-size: 1.05rem;
+}
+
 .data-table {
   width: 100%;
   border-collapse: collapse;
@@ -600,6 +693,75 @@ a {
 .data-table td {
   font-family: "IBM Plex Mono", monospace;
   color: #2b2722;
+}
+
+.analysis-table-wrap,
+.statement-detail-table-wrap {
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.64);
+}
+
+.analysis-table,
+.statement-detail-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.analysis-table th,
+.analysis-table td,
+.statement-detail-table th,
+.statement-detail-table td {
+  padding: 0.78rem 0.7rem;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.analysis-table thead th,
+.statement-detail-table thead th {
+  position: sticky;
+  top: 0;
+  background: rgba(244, 239, 231, 0.96);
+  z-index: 1;
+}
+
+.analysis-table tbody th,
+.statement-detail-table tbody th {
+  font-weight: 600;
+}
+
+.statement-section-row th {
+  background: rgba(123, 75, 55, 0.08);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+}
+
+.statement-value-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.statement-value-cell strong {
+  font-family: "IBM Plex Mono", monospace;
+}
+
+.statement-value-cell span,
+.statement-value-cell em {
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-style: normal;
+}
+
+.statement-detail-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(18rem, 0.8fr);
+  gap: 1rem;
 }
 
 .state-block {
@@ -824,8 +986,17 @@ a {
   }
 
   .two-up,
-  .metric-grid {
+  .metric-grid,
+  .statement-panel-grid,
+  .statement-detail-layout {
     grid-template-columns: 1fr;
+  }
+
+  .workspace-toolbar,
+  .toolbar-cluster,
+  .statement-header-actions {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .inline-action {

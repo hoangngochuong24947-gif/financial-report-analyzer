@@ -395,6 +395,23 @@ class WorkspaceService:
         period: str,
         lang: str,
     ) -> list[StatementDetailRow]:
+        detailed_rows = workspace.statement_details.get(statement_key, {}).get(period, [])
+        if detailed_rows:
+            return [
+                StatementDetailRow(
+                    key=str(row.get("key", "")),
+                    label=str(row.get("label", "")),
+                    section=str(row.get("section")) if row.get("section") else None,
+                    value=row.get("value"),
+                    display_value=str(row.get("display_value", "")),
+                    unit=str(row.get("unit", "")),
+                    source=str(row.get("source", "baidu_archive")),
+                    is_estimated=bool(row.get("is_estimated", False)),
+                )
+                for row in detailed_rows
+                if row.get("label")
+            ]
+
         statement_items = {
             "balance_sheet": workspace.snapshot.balance_sheets,
             "income_statement": workspace.snapshot.income_statements,
@@ -414,6 +431,7 @@ class WorkspaceService:
                 StatementDetailRow(
                     key=key,
                     label=self._STATEMENT_LABELS[lang].get(key, key),
+                    section=None,
                     value=value,
                     display_value=str(value),
                     unit="",
