@@ -35,6 +35,8 @@ class Settings(BaseSettings):
 
     baidu_finance_timeout: int = 60
     baidu_finance_retry_count: int = 2
+    baidu_finance_indicator_dom_enabled: bool = False
+    baidu_finance_indicator_dom_timeout_ms: int = 5000
     baidu_finance_user_agent: str = (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "

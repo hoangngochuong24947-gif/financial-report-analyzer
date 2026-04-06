@@ -16,6 +16,7 @@ from src.crawler.providers.baidu_finance.parsers import (
     parse_income_statements,
 )
 from src.data_fetcher.akshare_client import AKShareClient
+from src.config.settings import settings
 from src.models.financial_statements import BalanceSheet, CashFlowStatement, IncomeStatement
 from src.storage.archive_repository import ArchiveRepository, ArchiveWriteResult
 from src.utils.logger import logger
@@ -81,21 +82,7 @@ class BaiduFinanceCrawlerService:
         balance_sheets = parse_balance_sheets(stock_code, balance_result)
         cashflow_statements = parse_cashflow_statements(stock_code, cashflow_result)
 
-        indicator_payload = self._scrape_indicator_table(stock_code)
-        if not indicator_payload.get("rows"):
-            logger.warning("Baidu indicator DOM scrape failed, falling back to AKShare indicators for {}", stock_code)
-            latest_indicator_snapshot = AKShareClient.fetch_financial_indicators(stock_code)
-            indicator_payload = {
-                "rows": [
-                    {
-                        "metric": key,
-                        "latest_report_label": latest_indicator_snapshot.get("report_date"),
-                        "latest_value": value,
-                    }
-                    for key, value in latest_indicator_snapshot.items()
-                ],
-                "latest": latest_indicator_snapshot,
-            }
+        indicator_payload = self._load_indicator_payload(stock_code)
 
         artifacts = {
             Dataset.INCOME_STATEMENT: self._archive_repository.save_dataset(
@@ -170,15 +157,15 @@ class BaiduFinanceCrawlerService:
             with sync_playwright() as p:
                 browser = p.chromium.launch(headless=True)
                 page = browser.new_page()
-                page.set_default_timeout(60000)
+                page.set_default_timeout(settings.baidu_finance_indicator_dom_timeout_ms)
                 page.goto(url, wait_until="domcontentloaded")
-                page.wait_for_timeout(6000)
+                page.wait_for_timeout(min(settings.baidu_finance_indicator_dom_timeout_ms, 6000))
                 indicator_tab = page.get_by_text(
                     DATASET_ENDPOINT_SPECS[Dataset.FINANCIAL_INDICATORS].tab_text,
                     exact=False,
                 ).first
                 indicator_tab.click()
-                page.wait_for_timeout(3000)
+                page.wait_for_timeout(min(settings.baidu_finance_indicator_dom_timeout_ms, 3000))
                 payload = page.evaluate(
                     """
                     () => {
@@ -235,3 +222,23 @@ class BaiduFinanceCrawlerService:
         except Exception as exc:
             logger.warning("Failed to scrape Baidu indicator table for {}: {}", stock_code, exc)
             return {"rows": [], "latest": {}}
+
+    def _load_indicator_payload(self, stock_code: str) -> Dict[str, Any]:
+        if settings.baidu_finance_indicator_dom_enabled:
+            indicator_payload = self._scrape_indicator_table(stock_code)
+            if indicator_payload.get("rows"):
+                return indicator_payload
+            logger.warning("Baidu indicator DOM scrape failed, falling back to AKShare indicators for {}", stock_code)
+
+        latest_indicator_snapshot = AKShareClient.fetch_financial_indicators(stock_code)
+        return {
+            "rows": [
+                {
+                    "metric": key,
+                    "latest_report_label": latest_indicator_snapshot.get("report_date"),
+                    "latest_value": value,
+                }
+                for key, value in latest_indicator_snapshot.items()
+            ],
+            "latest": latest_indicator_snapshot,
+        }
