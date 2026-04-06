@@ -72,6 +72,26 @@ class CrawlRunRepository:
             raise FileNotFoundError(f"Run state not found: {run_id}")
         return json.loads(path.read_text(encoding="utf-8"))
 
+    def list_runs(self, limit: int = 0) -> list[dict[str, Any]]:
+        state_paths = sorted(self._root.glob("*/state.json"), reverse=True)
+        payloads: list[dict[str, Any]] = []
+        for path in state_paths:
+            payloads.append(json.loads(path.read_text(encoding="utf-8")))
+            if limit and len(payloads) >= limit:
+                break
+        return payloads
+
+    def successful_stocks_for_date(self, date_key: str) -> set[str]:
+        successful_codes: set[str] = set()
+        for payload in self.list_runs():
+            for stock_code, item in payload.get("stocks", {}).items():
+                if item.get("status") != "success":
+                    continue
+                finished_at = str(item.get("finished_at") or "")
+                if finished_at.startswith(date_key):
+                    successful_codes.add(stock_code)
+        return successful_codes
+
     def save_run(self, run_id: str, payload: dict[str, Any]) -> None:
         payload["updated_at"] = utc_now()
         payload["summary"] = self._build_summary(payload.get("stocks", {}))
