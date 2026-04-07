@@ -43,6 +43,16 @@ function getStoredCode(): string {
   return window.localStorage.getItem("workspace-selected-code") ?? "";
 }
 
+function getArchiveStatusLabelSafe(lang: Lang, archived: boolean): string {
+  return archived
+    ? lang === "zh"
+      ? "已归档"
+      : "Archived"
+    : lang === "zh"
+      ? "待归档"
+      : "Pending archive";
+}
+
 function summarizeJobState(copy: ReturnType<typeof getWorkspaceCopy>, state: CrawlJobState | undefined): string {
   if (!state?.status) {
     return copy.shared.unavailable;
@@ -248,7 +258,7 @@ export default function App() {
                   <span>{stock.stock_code}</span>
                   <em>
                     {stock.market ?? copy.shared.unavailable} ·{" "}
-                    {getArchiveStatusLabel(lang, workspaceCodes.has(stock.stock_code))}
+                    {getArchiveStatusLabelSafe(lang, workspaceCodes.has(stock.stock_code))}
                   </em>
                 </button>
               ))
@@ -362,7 +372,7 @@ export default function App() {
   const archivePendingTitle =
     createCrawlerMutation.isPending || ["queued", "started", "running"].includes(String(currentJobState?.status ?? "").toLowerCase())
       ? copy.shell.crawlerJob
-      : getArchiveStatusLabel(lang, false);
+      : getArchiveStatusLabelSafe(lang, false);
   const archivePendingDescription =
     (currentJobState?.error as string | undefined) ??
     (createCrawlerMutation.isPending ? copy.shell.autoCrawlStarted : copy.shell.missingArchive);

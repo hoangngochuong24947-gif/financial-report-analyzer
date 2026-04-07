@@ -57,7 +57,10 @@ class ArchiveRepository:
         manifest_dir.mkdir(parents=True, exist_ok=True)
 
         raw_path = raw_dir / f"{stock_code}_{dataset.value}_{request_group}_{fetch_ts}.json"
-        raw_path.write_text(json.dumps(raw_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        raw_path.write_text(
+            json.dumps(raw_payload, ensure_ascii=False, indent=2, default=str),
+            encoding="utf-8",
+        )
 
         period_labels = [row.get("report_date") or row.get("latest_report_label") for row in csv_rows if row]
         valid_periods = [str(item) for item in period_labels if item]
@@ -95,7 +98,10 @@ class ArchiveRepository:
             **asdict(result),
         }
         payload["manifest_path"] = str(manifest_path)
-        manifest_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        manifest_path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2, default=str),
+            encoding="utf-8",
+        )
         result.manifest_path = str(manifest_path)
         return result
 

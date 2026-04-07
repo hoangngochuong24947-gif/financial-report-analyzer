@@ -23,6 +23,13 @@ function statementLabel(copy: ReturnType<typeof getWorkspaceCopy>, key: Statemen
   return copy.statements.overview;
 }
 
+function statementReadingHint(lang: Lang): string {
+  if (lang === "zh") {
+    return "当前页面以报表阅读为主，建议结合总览页的关键指标矩阵和模型页的结构判断交叉验证。";
+  }
+  return "This view is optimized for report reading. Cross-check it with the overview metrics and the model page for interpretation.";
+}
+
 export function StatementDetailPage({
   selectedCode,
   selectedStock,
@@ -229,11 +236,7 @@ export function StatementDetailPage({
           >
             {statementData ? (
               <div className="copy-block">
-                <p>
-                  {lang === "zh"
-                    ? "当前页面以报表阅读为主，建议结合总览页的关键指标矩阵和模型页的结构判断交叉验证。"
-                    : "This view is optimized for report reading. Cross-check it with the overview metrics and the model page for interpretation."}
-                </p>
+                <p>{statementReadingHint(lang)}</p>
                 <DataTable
                   rows={[
                     [copy.statements.reportDate, statementData.selected_period ?? "-"],

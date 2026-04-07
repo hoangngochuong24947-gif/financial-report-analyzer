@@ -23,6 +23,13 @@ type WorkspaceQuery = {
   lang?: string;
 };
 
+function toApiLang(lang?: Lang): string | undefined {
+  if (!lang) {
+    return undefined;
+  }
+  return lang === "en" ? "en-US" : "en-US";
+}
+
 type WorkspaceGetPath<Body> = {
   parameters: {
     query?: never;
@@ -307,42 +314,42 @@ export interface WorkspaceSummary {
 
 export async function listWorkspaces(limit = 20, lang?: Lang): Promise<WorkspaceSummary[]> {
   const result = await workspaceClient.GET("/api/v2/workspaces", {
-    params: { query: { limit, lang } },
+    params: { query: { limit, lang: toApiLang(lang) } },
   });
   return unwrapData("GET", "/api/v2/workspaces", result);
 }
 
 export async function getWorkspaceSnapshot(code: string, lang?: Lang): Promise<WorkspaceSnapshotResponse> {
   const result = await workspaceClient.GET("/api/v2/workspace/{code}/snapshot", {
-    params: { path: { code }, query: { lang } },
+    params: { path: { code }, query: { lang: toApiLang(lang) } },
   });
   return unwrapData("GET", "/api/v2/workspace/{code}/snapshot", result);
 }
 
 export async function getWorkspaceMetricCatalog(code: string, lang?: Lang): Promise<WorkspaceMetricCatalogResponse> {
   const result = await workspaceClient.GET("/api/v2/workspace/{code}/metrics/catalog", {
-    params: { path: { code }, query: { lang } },
+    params: { path: { code }, query: { lang: toApiLang(lang) } },
   });
   return unwrapData("GET", "/api/v2/workspace/{code}/metrics/catalog", result);
 }
 
 export async function getWorkspaceMetricValues(code: string, lang?: Lang): Promise<WorkspaceMetricValuesResponse> {
   const result = await workspaceClient.GET("/api/v2/workspace/{code}/metrics", {
-    params: { path: { code }, query: { lang } },
+    params: { path: { code }, query: { lang: toApiLang(lang) } },
   });
   return unwrapData("GET", "/api/v2/workspace/{code}/metrics", result);
 }
 
 export async function getWorkspaceModelResults(code: string, lang?: Lang): Promise<WorkspaceModelResultsResponse> {
   const result = await workspaceClient.GET("/api/v2/workspace/{code}/models", {
-    params: { path: { code }, query: { lang } },
+    params: { path: { code }, query: { lang: toApiLang(lang) } },
   });
   return unwrapData("GET", "/api/v2/workspace/{code}/models", result);
 }
 
 export async function getWorkspaceAiInsightsContext(code: string, lang?: Lang): Promise<WorkspaceAiInsightsContextResponse> {
   const result = await workspaceClient.GET("/api/v2/workspace/{code}/insights/context", {
-    params: { path: { code }, query: { lang } },
+    params: { path: { code }, query: { lang: toApiLang(lang) } },
   });
   return unwrapData("GET", "/api/v2/workspace/{code}/insights/context", result);
 }
@@ -353,7 +360,7 @@ export async function getWorkspaceStatements(
   period?: string,
 ): Promise<WorkspaceStatementsResponse> {
   const result = await workspaceClient.GET("/api/v2/workspace/{code}/statements", {
-    params: { path: { code }, query: { lang, period } },
+    params: { path: { code }, query: { lang: toApiLang(lang), period } },
   });
   return unwrapData("GET", "/api/v2/workspace/{code}/statements", result);
 }
@@ -363,7 +370,7 @@ export async function generateWorkspaceInsights(
   lang?: Lang,
 ): Promise<WorkspaceInsightReportResponse> {
   const result = await workspaceClient.POST("/api/v2/workspace/{code}/insights/generate", {
-    params: { path: { code }, query: { lang } },
+    params: { path: { code }, query: { lang: toApiLang(lang) } },
   });
   return unwrapData("POST", "/api/v2/workspace/{code}/insights/generate", result);
 }
