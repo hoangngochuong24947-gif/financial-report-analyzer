@@ -15,6 +15,7 @@ from src.models.workspace_metrics import (
     AnalysisModelResponse,
     ApiPromptProfile,
     InsightContextResponse,
+    InsightReportHistoryItem,
     InsightReportResponse,
     MetricCatalogItem,
     MetricCatalogResponse,
@@ -30,6 +31,7 @@ from src.models.workspace_metrics import (
     WorkspaceSummary,
 )
 from src.storage.workspace_repository import ArchiveWorkspace, WorkspaceRepository
+from src.storage.report_repository import ReportRepository
 
 
 class WorkspaceService:
@@ -133,11 +135,15 @@ class WorkspaceService:
     def __init__(
         self,
         repository: WorkspaceRepository | None = None,
+        report_repository: ReportRepository | None = None,
         metric_engine: WorkspaceMetricEngine | None = None,
         model_engine: WorkspaceModelEngine | None = None,
         context_builder: PromptContextBuilder | None = None,
     ) -> None:
         self._repository = repository or WorkspaceRepository()
+        self._report_repository = report_repository or ReportRepository(
+            root=str(getattr(self._repository, "_archive_root", "data"))
+        )
         self._metric_engine = metric_engine or WorkspaceMetricEngine()
         self._model_engine = model_engine or WorkspaceModelEngine()
         self._context_builder = context_builder or PromptContextBuilder()
@@ -305,6 +311,7 @@ class WorkspaceService:
         prompt = self._build_insight_prompt(context, model_response, locale)
         raw_output = get_llm_client().analyze(prompt=prompt, system_prompt=context.injection_bundle.system_prompt)
         parsed = self._parse_generated_report(raw_output, locale)
+        evidence = parsed["evidence"] if parsed["evidence"] else self._default_evidence_keys(stock_code)
         return InsightReportResponse(
             stock_code=context.stock_code,
             stock_name=context.stock_name,
@@ -315,10 +322,75 @@ class WorkspaceService:
             risks=parsed["risks"],
             open_questions=parsed["open_questions"],
             actions=parsed["actions"],
-            evidence=parsed["evidence"],
+            evidence=evidence,
             generated_at=datetime.now(timezone.utc).isoformat(),
             model_version="workspace-insights-v1",
         )
+
+    def generate_and_save_insight_report(
+        self,
+        stock_code: str,
+        lang: str = "zh-CN",
+        period: str | None = None,
+    ) -> InsightReportResponse:
+        report = self.generate_insight_report(stock_code=stock_code, lang=lang, period=period)
+        self._report_repository.save_report(report)
+        return report
+
+    def save_insight_report(self, report: InsightReportResponse) -> InsightReportHistoryItem:
+        return self._report_repository.save_report(report)
+
+    def get_saved_insight_report(
+        self,
+        stock_code: str,
+        lang: str = "zh-CN",
+        period: str | None = None,
+    ) -> InsightReportResponse:
+        locale = self._normalize_lang(lang)
+        return self._report_repository.load_report(stock_code=stock_code, period=period, lang=locale)
+
+    def list_saved_insight_reports(self, stock_code: str, limit: int = 20) -> list[InsightReportHistoryItem]:
+        return self._report_repository.list_reports(stock_code=stock_code, limit=limit)
+
+    def export_statement_rows(
+        self,
+        stock_code: str,
+        statement_key: str,
+        period: str | None = None,
+        lang: str = "zh-CN",
+    ) -> tuple[str, str, list[StatementDetailRow]]:
+        detail = self.get_statement_detail_response(stock_code=stock_code, period=period, lang=lang)
+        tab = next((item for item in detail.tabs if item.key == statement_key), None)
+        if tab is None:
+            raise FileNotFoundError(f"No statement tab found for {stock_code} {statement_key}")
+        return detail.stock.stock_name, detail.selected_period, tab.rows
+
+    def export_all_statement_rows(
+        self,
+        stock_code: str,
+        lang: str = "zh-CN",
+    ) -> tuple[str, dict[str, list[dict[str, object]]]]:
+        workspace = self.get_workspace(stock_code)
+        locale = self._normalize_lang(lang)
+        sheets: dict[str, list[dict[str, object]]] = {}
+        for statement_key in ("balance_sheet", "income_statement", "cashflow_statement"):
+            rows: list[dict[str, object]] = []
+            for period in self._collect_periods(workspace):
+                for row in self._statement_rows(workspace, statement_key, period, locale):
+                    rows.append(
+                        {
+                            "report_date": period,
+                            "section": row.section or "",
+                            "label": row.label,
+                            "display_value": row.display_value,
+                            "value": row.value,
+                            "unit": row.unit,
+                            "source": row.source,
+                            "is_estimated": row.is_estimated,
+                        }
+                    )
+            sheets[statement_key] = rows
+        return workspace.stock_name, sheets
 
     @staticmethod
     def _collect_periods(workspace: ArchiveWorkspace) -> List[str]:
@@ -451,6 +523,10 @@ class WorkspaceService:
         priority_keys = {"roe", "debt_to_asset_ratio", "operating_cashflow_margin", "free_cash_flow", "net_income_yoy"}
         parts = [f"{item.label}: {item.value}" for item in bundle.values if item.key in priority_keys]
         return " | ".join(parts)
+
+    def _default_evidence_keys(self, stock_code: str) -> list[str]:
+        bundle = self.get_metric_bundle(stock_code)
+        return [item.key for item in bundle.values[:5]]
 
     @staticmethod
     def _build_model_summary(items: List[AnalysisModelItem]) -> str:

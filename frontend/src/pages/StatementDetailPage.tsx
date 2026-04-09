@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { StockInfo } from "../api/sdk";
-import { getWorkspaceStatements } from "../api/workspace";
+import {
+  buildWorkspaceStatementExportUrl,
+  buildWorkspaceStatementHistoryExportUrl,
+  getWorkspaceStatements,
+} from "../api/workspace";
 import { FinancialStatementTable } from "../components/FinancialStatementTable";
 import { DataTable, LoadingSkeleton, MetricGrid, SectionCard, StateBlock } from "../components/DataBlocks";
 import { formatDateTime } from "../lib/finance";
@@ -25,9 +29,42 @@ function statementLabel(copy: ReturnType<typeof getWorkspaceCopy>, key: Statemen
 
 function statementReadingHint(lang: Lang): string {
   if (lang === "zh") {
-    return "当前页面以报表阅读为主，建议结合总览页的关键指标矩阵和模型页的结构判断交叉验证。";
+    return "这个页面更适合按报表和报告期连续阅读，建议结合总览页的关键指标与模型页的判断一起交叉验证。";
   }
   return "This view is optimized for report reading. Cross-check it with the overview metrics and the model page for interpretation.";
+}
+
+function statementActionLabel(lang: Lang, kind: "open" | "downloadCurrent" | "downloadHistory"): string {
+  if (lang === "zh") {
+    if (kind === "open") return "新标签打开";
+    if (kind === "downloadCurrent") return "下载当前表";
+    return "下载历年报表";
+  }
+
+  if (kind === "open") return "Open in new tab";
+  if (kind === "downloadCurrent") return "Download current";
+  return "Download history";
+}
+
+function isStatementKey(value: string | null): value is StatementKey {
+  return value === "overview" || value === "balance_sheet" || value === "income_statement" || value === "cashflow_statement";
+}
+
+function readStoredStatementTab(stockCode: string): StatementKey {
+  if (typeof window === "undefined" || !stockCode) {
+    return "overview";
+  }
+
+  const stored = window.localStorage.getItem(`workspace-statement-tab:${stockCode}`);
+  return isStatementKey(stored) ? stored : "overview";
+}
+
+function readStoredStatementPeriod(stockCode: string): string | undefined {
+  if (typeof window === "undefined" || !stockCode) {
+    return undefined;
+  }
+
+  return window.localStorage.getItem(`workspace-statement-period:${stockCode}`) ?? undefined;
 }
 
 export function StatementDetailPage({
@@ -38,8 +75,8 @@ export function StatementDetailPage({
 }: StatementDetailPageProps) {
   const copy = getWorkspaceCopy(lang);
   const locale = getBrowserLocale(lang);
-  const [activeTab, setActiveTab] = useState<StatementKey>("overview");
-  const [selectedPeriod, setSelectedPeriod] = useState<string | undefined>();
+  const [activeTab, setActiveTab] = useState<StatementKey>(() => readStoredStatementTab(selectedCode));
+  const [selectedPeriod, setSelectedPeriod] = useState<string | undefined>(() => readStoredStatementPeriod(selectedCode));
 
   const statementsQuery = useQuery({
     queryKey: ["workspace-statements-view", selectedCode, lang, selectedPeriod],
@@ -51,10 +88,35 @@ export function StatementDetailPage({
   const statementData = statementsQuery.data;
 
   useEffect(() => {
-    if (!selectedPeriod && statementData?.available_periods?.length) {
+    if (!statementData?.available_periods?.length) {
+      return;
+    }
+
+    if (!selectedPeriod || !statementData.available_periods.includes(selectedPeriod)) {
       setSelectedPeriod(statementData.available_periods[0]);
     }
   }, [selectedPeriod, statementData?.available_periods]);
+
+  useEffect(() => {
+    setActiveTab(readStoredStatementTab(selectedCode));
+    setSelectedPeriod(readStoredStatementPeriod(selectedCode));
+  }, [selectedCode]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !selectedCode) {
+      return;
+    }
+
+    window.localStorage.setItem(`workspace-statement-tab:${selectedCode}`, activeTab);
+  }, [activeTab, selectedCode]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !selectedCode || !selectedPeriod) {
+      return;
+    }
+
+    window.localStorage.setItem(`workspace-statement-period:${selectedCode}`, selectedPeriod);
+  }, [selectedCode, selectedPeriod]);
 
   const stockIdentity = statementData?.stock ?? {
     stock_code: selectedCode,
@@ -93,6 +155,38 @@ export function StatementDetailPage({
     [copy, locale, selectedCode, selectedPeriod, selectedStock, statementData, stockIdentity.stock_name],
   );
 
+  const activeTitle = statementLabel(copy, activeTab);
+  const activeRows =
+    activeTab === "balance_sheet"
+      ? balanceTab?.rows ?? []
+      : activeTab === "income_statement"
+        ? incomeTab?.rows ?? []
+        : cashflowTab?.rows ?? [];
+
+  const currentExportUrl = useMemo(() => {
+    if (!selectedCode || !selectedPeriod || activeTab === "overview") {
+      return undefined;
+    }
+
+    return buildWorkspaceStatementExportUrl(selectedCode, activeTab, selectedPeriod, "csv", lang);
+  }, [activeTab, lang, selectedCode, selectedPeriod]);
+
+  const historyExportUrl = useMemo(() => {
+    if (!selectedCode) {
+      return undefined;
+    }
+
+    return buildWorkspaceStatementHistoryExportUrl(selectedCode, "xlsx", lang);
+  }, [lang, selectedCode]);
+
+  const handleOpenInNewTab = () => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.open("/metrics/statements", "_blank", "noopener,noreferrer");
+  };
+
   if (!selectedCode) {
     return (
       <SectionCard title={copy.statements.title} eyebrow={copy.statements.eyebrow}>
@@ -109,14 +203,6 @@ export function StatementDetailPage({
       </SectionCard>
     );
   }
-
-  const activeTitle = statementLabel(copy, activeTab);
-  const activeRows =
-    activeTab === "balance_sheet"
-      ? balanceTab?.rows ?? []
-      : activeTab === "income_statement"
-        ? incomeTab?.rows ?? []
-        : cashflowTab?.rows ?? [];
 
   return (
     <div className="page-stack">
@@ -138,9 +224,24 @@ export function StatementDetailPage({
                 ))}
               </select>
             </label>
-            <button type="button" className="ghost-button" onClick={onBackToOverview}>
-              {copy.statements.backToOverview}
-            </button>
+            <div className="statement-action-group">
+              <button type="button" className="ghost-button" onClick={handleOpenInNewTab}>
+                {statementActionLabel(lang, "open")}
+              </button>
+              {currentExportUrl ? (
+                <a className="ghost-button" href={currentExportUrl}>
+                  {statementActionLabel(lang, "downloadCurrent")}
+                </a>
+              ) : null}
+              {historyExportUrl ? (
+                <a className="ghost-button" href={historyExportUrl}>
+                  {statementActionLabel(lang, "downloadHistory")}
+                </a>
+              ) : null}
+              <button type="button" className="ghost-button" onClick={onBackToOverview}>
+                {copy.statements.backToOverview}
+              </button>
+            </div>
           </div>
         }
       >

@@ -1,9 +1,10 @@
-import { useMemo, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { StockInfo } from "../api/sdk";
 import {
   generateWorkspaceInsights,
   getWorkspaceAiInsightsContext,
+  getWorkspaceSavedInsightReport,
   type WorkspaceInsightReportResponse,
 } from "../api/workspace";
 import { BulletList, CopyBlock, LoadingSkeleton, MetricGrid, SectionCard, StateBlock } from "../components/DataBlocks";
@@ -51,13 +52,21 @@ function renderTextBlock(value: unknown): string {
 export function InsightsPage({ selectedCode, selectedStock, lang }: InsightsPageProps) {
   const copy = getWorkspaceCopy(lang);
   const locale = getBrowserLocale(lang);
-  const [generatedReport, setGeneratedReport] = useState<WorkspaceInsightReportResponse | undefined>();
+  const queryClient = useQueryClient();
 
   const contextQuery = useQuery({
     queryKey: ["workspace-insights-context", selectedCode, lang],
     enabled: Boolean(selectedCode),
     queryFn: () => getWorkspaceAiInsightsContext(selectedCode, lang),
     staleTime: 30 * 60_000,
+  });
+
+  const savedReportQuery = useQuery({
+    queryKey: ["workspace-insights-report", selectedCode, lang],
+    enabled: Boolean(selectedCode),
+    queryFn: () => getWorkspaceSavedInsightReport(selectedCode, lang),
+    staleTime: 60_000,
+    retry: false,
   });
 
   const generateMutation = useMutation({
@@ -67,7 +76,8 @@ export function InsightsPage({ selectedCode, selectedStock, lang }: InsightsPage
     },
     onSuccess: (report) => {
       if (report) {
-        setGeneratedReport(report);
+        queryClient.setQueryData(["workspace-insights-report", selectedCode, lang], report);
+        void queryClient.invalidateQueries({ queryKey: ["workspace-insights-context", selectedCode, lang] });
       }
     },
   });
@@ -93,7 +103,7 @@ export function InsightsPage({ selectedCode, selectedStock, lang }: InsightsPage
     [copy, contextQuery.data, selectedCode, selectedStock],
   );
 
-  const report = generatedReport;
+  const report = savedReportQuery.data ?? undefined;
   const reportSections = useMemo(
     () =>
       report
@@ -183,18 +193,21 @@ export function InsightsPage({ selectedCode, selectedStock, lang }: InsightsPage
               title={copy.insights.generating}
               description="The backend is assembling a new AI report from the workspace evidence."
             />
+          ) : savedReportQuery.isLoading ? (
+            <LoadingSkeleton lines={4} />
           ) : report ? (
             <div className="copy-block">
               <p>
                 <strong>{copy.insights.executiveSummary}</strong>
               </p>
-              <p>{renderTextBlock(report.executive_summary) || copy.insights.reportUnavailable}</p>
+              <p>{renderTextBlock(report.executive_summary ?? report.summary) || copy.insights.reportUnavailable}</p>
               <p>
                 {copy.insights.generatedAt}: {formatDateTime(report.generated_at, locale)}
               </p>
               <p>
                 {copy.insights.reportDate}: {report.report_date ?? contextQuery.data?.report_date ?? copy.shared.unavailable}
               </p>
+              <p>{lang === "zh" ? "该报告已存储在后端，切换页面后仍可继续查看。" : "This report is stored on the backend and remains available after navigation."}</p>
             </div>
           ) : (
             <StateBlock title={copy.insights.reportUnavailable} description={copy.insights.description} />
@@ -243,4 +256,3 @@ export function InsightsPage({ selectedCode, selectedStock, lang }: InsightsPage
     </div>
   );
 }
-

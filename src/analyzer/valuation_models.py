@@ -48,3 +48,56 @@ def build_value_trap(metrics: Dict[str, Decimal]) -> AnalysisModelItem:
         score=f"{earnings_yield.quantize(Decimal('0.0001'))}",
         evidence_keys=["earnings_yield", "revenue_yoy", "cash_to_profit_ratio", "accrual_ratio"],
     )
+
+
+def build_shareholder_return_quality(metrics: Dict[str, Decimal]) -> AnalysisModelItem:
+    roe = metrics.get("roe", Decimal("0"))
+    earnings_yield = metrics.get("earnings_yield", Decimal("0"))
+    book_to_price = metrics.get("book_to_price", Decimal("0"))
+    verdict = (
+        "strong"
+        if roe >= Decimal("0.1200") and (earnings_yield + book_to_price) >= Decimal("0.1000")
+        else "mixed"
+        if roe >= Decimal("0.0800")
+        else "weak"
+    )
+    summary = (
+        f"ROE is {roe.quantize(Decimal('0.0001'))}, earnings yield is {earnings_yield.quantize(Decimal('0.0001'))}, "
+        f"and book-to-price is {book_to_price.quantize(Decimal('0.0001'))}, "
+        f"suggesting {'shareholder returns are supported by a reasonable valuation base.' if verdict == 'strong' else 'returns are acceptable but valuation support is mixed.' if verdict == 'mixed' else 'returns look weak relative to valuation support.'}"
+    )
+    return AnalysisModelItem(
+        key="shareholder_return_quality",
+        label="Shareholder Return Quality",
+        verdict=verdict,
+        summary=summary,
+        score=f"{roe.quantize(Decimal('0.0001'))}",
+        evidence_keys=["roe", "earnings_yield", "book_to_price", "valuation_buffer"],
+    )
+
+
+def build_valuation_compression_risk(metrics: Dict[str, Decimal]) -> AnalysisModelItem:
+    pe_ttm = metrics.get("pe_ttm", Decimal("0"))
+    ps_ratio = metrics.get("ps_ratio", Decimal("0"))
+    revenue_yoy = metrics.get("revenue_yoy", Decimal("0"))
+    net_income_yoy = metrics.get("net_income_yoy", Decimal("0"))
+    verdict = (
+        "high"
+        if ((pe_ttm > Decimal("25") or ps_ratio > Decimal("4")) and (revenue_yoy < 0 or net_income_yoy < 0))
+        else "medium"
+        if pe_ttm > Decimal("15") or ps_ratio > Decimal("2")
+        else "low"
+    )
+    summary = (
+        f"PE TTM is {pe_ttm.quantize(Decimal('0.0001'))}, PS is {ps_ratio.quantize(Decimal('0.0001'))}, "
+        f"revenue YoY is {revenue_yoy.quantize(Decimal('0.0001'))}, and net income YoY is {net_income_yoy.quantize(Decimal('0.0001'))}; "
+        f"this points to {'elevated valuation compression risk.' if verdict == 'high' else 'moderate multiple compression sensitivity.' if verdict == 'medium' else 'limited valuation compression pressure.'}"
+    )
+    return AnalysisModelItem(
+        key="valuation_compression_risk",
+        label="Valuation Compression Risk",
+        verdict=verdict,
+        summary=summary,
+        score=f"{pe_ttm.quantize(Decimal('0.0001'))}",
+        evidence_keys=["pe_ttm", "ps_ratio", "revenue_yoy", "net_income_yoy"],
+    )

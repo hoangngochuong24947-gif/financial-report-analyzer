@@ -246,3 +246,14 @@ class InsightReportResponse(BaseModel):
     evidence: list[str] = Field(default_factory=list, description="Evidence references")
     generated_at: str = Field(..., description="Generation timestamp")
     model_version: str = Field(default="workspace-insights-v1", description="Workspace insight contract version")
+
+
+class InsightReportHistoryItem(BaseModel):
+    stock_code: str = Field(..., description="Stock code")
+    stock_name: str = Field(..., description="Stock name")
+    report_date: str = Field(..., description="Selected report date")
+    lang: str = Field(default="zh-CN", description="Stored language")
+    generated_at: str = Field(..., description="Generation timestamp")
+    model_version: str = Field(default="workspace-insights-v1", description="Workspace insight contract version")
+    json_path: str = Field(..., description="Stored JSON path")
+    markdown_path: str = Field(..., description="Stored Markdown path")

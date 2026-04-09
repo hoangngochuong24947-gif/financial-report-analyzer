@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List
@@ -63,13 +62,8 @@ class WorkspaceRepository:
         )
 
     def list_workspaces(self, limit: int = 20) -> List[WorkspaceSummary]:
-        manifests = self._archive_repository.list_archives(limit=1000)
-        stock_codes: Dict[str, List[Dict[str, str]]] = defaultdict(list)
-        for manifest in manifests:
-            stock_codes[manifest["stock_code"]].append(manifest)
-
         summaries: List[WorkspaceSummary] = []
-        for stock_code in stock_codes:
+        for stock_code in self._archive_repository.list_stock_codes():
             workspace = self.load_workspace(stock_code)
             summaries.append(
                 WorkspaceSummary(

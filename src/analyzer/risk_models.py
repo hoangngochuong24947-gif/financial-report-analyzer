@@ -61,3 +61,57 @@ def build_cashflow_risk(metrics: Dict[str, Decimal]) -> AnalysisModelItem:
         score=f"{accrual_ratio.quantize(Decimal('0.0001'))}",
         evidence_keys=["accrual_ratio", "cash_to_profit_ratio", "operating_cashflow_margin", "free_cash_flow"],
     )
+
+
+def build_debt_service_capacity(metrics: Dict[str, Decimal]) -> AnalysisModelItem:
+    ocf_to_liabilities = metrics.get("ocf_to_liabilities", Decimal("0"))
+    fcf_to_debt = metrics.get("fcf_to_debt", Decimal("0"))
+    current_ratio = metrics.get("current_ratio", Decimal("0"))
+    verdict = (
+        "strong"
+        if ocf_to_liabilities >= Decimal("0.20") and fcf_to_debt >= Decimal("0.10") and current_ratio >= Decimal("1.50")
+        else "mixed"
+        if ocf_to_liabilities >= Decimal("0.10") and current_ratio >= Decimal("1.00")
+        else "weak"
+    )
+    summary = (
+        f"OCF/liabilities is {ocf_to_liabilities.quantize(Decimal('0.0001'))}, "
+        f"FCF/debt is {fcf_to_debt.quantize(Decimal('0.0001'))}, and "
+        f"current ratio is {current_ratio.quantize(Decimal('0.0001'))}, "
+        f"indicating {'solid debt-servicing capacity.' if verdict == 'strong' else 'adequate but monitorable debt coverage.' if verdict == 'mixed' else 'fragile debt-servicing capacity.'}"
+    )
+    return AnalysisModelItem(
+        key="debt_service_capacity",
+        label="Debt Service Capacity",
+        verdict=verdict,
+        summary=summary,
+        score=f"{ocf_to_liabilities.quantize(Decimal('0.0001'))}",
+        evidence_keys=["ocf_to_liabilities", "fcf_to_debt", "current_ratio", "liability_to_ocf"],
+    )
+
+
+def build_capital_structure_resilience(metrics: Dict[str, Decimal]) -> AnalysisModelItem:
+    equity_to_liabilities = metrics.get("equity_to_liabilities", Decimal("0"))
+    debt_ratio = metrics.get("debt_to_asset_ratio", Decimal("0"))
+    long_term_capital_ratio = metrics.get("long_term_capital_ratio", Decimal("0"))
+    verdict = (
+        "strong"
+        if equity_to_liabilities >= Decimal("1.00") and debt_ratio <= Decimal("0.50") and long_term_capital_ratio >= Decimal("1.00")
+        else "mixed"
+        if equity_to_liabilities >= Decimal("0.50") and long_term_capital_ratio >= Decimal("0.80")
+        else "weak"
+    )
+    summary = (
+        f"Equity/liabilities is {equity_to_liabilities.quantize(Decimal('0.0001'))}, "
+        f"debt/asset is {debt_ratio.quantize(Decimal('0.0001'))}, and "
+        f"long-term capital ratio is {long_term_capital_ratio.quantize(Decimal('0.0001'))}, "
+        f"showing {'a resilient capital structure.' if verdict == 'strong' else 'a serviceable but not fully comfortable capital structure.' if verdict == 'mixed' else 'a stretched capital structure.'}"
+    )
+    return AnalysisModelItem(
+        key="capital_structure_resilience",
+        label="Capital Structure Resilience",
+        verdict=verdict,
+        summary=summary,
+        score=f"{equity_to_liabilities.quantize(Decimal('0.0001'))}",
+        evidence_keys=["equity_to_liabilities", "debt_to_asset_ratio", "long_term_capital_ratio", "total_equity"],
+    )

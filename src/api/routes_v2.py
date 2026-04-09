@@ -52,21 +52,20 @@ async def list_stocks_v2(
     workspace_service: WorkspaceService = Depends(get_workspace_service),
 ):
     try:
-        if not refresh:
-            workspace_items = workspace_service.list_workspaces(limit=200)
-            if workspace_items:
-                filtered = [
-                    StockInfo(
-                        stock_code=item.stock_code,
-                        stock_name=item.stock_name,
-                        market=item.market,
-                    )
-                    for item in workspace_items
-                    if not market or item.market == market
-                ]
-                if filtered:
-                    return filtered
-        return crawler.fetch_stock_list(market=market, refresh=refresh)
+        stock_items = crawler.fetch_stock_list(market=market, refresh=refresh)
+        if stock_items:
+            return stock_items
+
+        workspace_items = workspace_service.list_workspaces(limit=5000)
+        return [
+            StockInfo(
+                stock_code=item.stock_code,
+                stock_name=item.stock_name,
+                market=item.market,
+            )
+            for item in workspace_items
+            if not market or item.market == market
+        ]
     except Exception as e:
         logger.error(f"v2 list stocks failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))

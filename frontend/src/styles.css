@@ -407,6 +407,13 @@ a {
   align-items: flex-end;
 }
 
+.statement-action-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
 .control-stack {
   display: grid;
   gap: 0.95rem;

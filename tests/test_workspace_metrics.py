@@ -63,12 +63,23 @@ def test_workspace_metric_engine_builds_catalog_and_values_from_archive_snapshot
 
     catalog_keys = {item.key for item in bundle.catalog}
     assert {"roe", "current_ratio", "free_cash_flow", "net_income_yoy"}.issubset(catalog_keys)
+    assert {
+        "ocf_to_assets",
+        "fcf_margin",
+        "capex_intensity",
+        "profit_to_ocf_gap",
+        "valuation_buffer",
+    }.issubset(catalog_keys)
 
     values = {item.key: item.value for item in bundle.values}
     assert values["roe"] == "0.6000"
     assert values["current_ratio"] == "2.0000"
     assert values["free_cash_flow"] == "800.00"
     assert values["net_income_yoy"] == "0.2000"
+    assert values["ocf_to_assets"] == "0.5000"
+    assert values["fcf_margin"] == "0.1600"
+    assert values["capex_intensity"] == "0.1400"
+    assert values["profit_to_ocf_gap"] == "-300.00"
 
 
 def test_workspace_metric_engine_extracts_risk_and_valuation_metrics_from_indicator_snapshot():
@@ -129,3 +140,5 @@ def test_workspace_metric_engine_extracts_risk_and_valuation_metrics_from_indica
     assert values["pe_ttm"] == "18.5000"
     assert values["pb_ratio"] == "3.2000"
     assert values["earnings_yield"] == "0.0541"
+    assert values["sales_to_price"] == "0.2439"
+    assert values["valuation_buffer"] == "0.3666"

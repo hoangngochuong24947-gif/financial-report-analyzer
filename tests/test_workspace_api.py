@@ -9,13 +9,117 @@ from src.main import app
 client = TestClient(app)
 
 
-def test_v2_stock_list_prefers_archive_workspace_summaries():
+def _seed_minimal_workspace(tmp_path):
+    from src.crawler.interfaces import Dataset
+    from src.storage.archive_repository import ArchiveRepository
+    from src.storage.workspace_repository import WorkspaceRepository
+    from src.api.workspace_service import WorkspaceService
+
+    def _openapi_row(report_label: str, values: dict[str, str]) -> dict:
+        return {
+            "text": report_label,
+            "content": [
+                {
+                    "data": [
+                        {
+                            "header": ["report_label", "", report_label],
+                            "body": [[key, "", value] for key, value in values.items()],
+                        }
+                    ]
+                }
+            ],
+        }
+
+    archive_repository = ArchiveRepository(archive_root=str(tmp_path))
+    archive_repository.save_dataset(
+        stock_code="000001",
+        stock_name="测试公司",
+        market="ab",
+        dataset=Dataset.INCOME_STATEMENT,
+        request_url="https://finance.pae.baidu.com/selfselect/openapi",
+        request_params={"group": "income_detail", "code": "000001"},
+        raw_payload={
+            "Result": {
+                "data": [
+                    _openapi_row(
+                        "2025三季报",
+                        {
+                            "一、营业总收入": "5000",
+                            "营业成本": "3000",
+                            "四、营业利润": "1500",
+                            "五、利润总额": "1600",
+                            "六、合并净利润": "1200",
+                        },
+                    )
+                ]
+            }
+        },
+        csv_rows=[{"report_date": "2025-09-30", "一、营业总收入": "5000"}],
+    )
+    archive_repository.save_dataset(
+        stock_code="000001",
+        stock_name="测试公司",
+        market="ab",
+        dataset=Dataset.BALANCE_SHEET,
+        request_url="https://finance.pae.baidu.com/selfselect/openapi",
+        request_params={"group": "balance_detail", "code": "000001"},
+        raw_payload={
+            "Result": {
+                "data": [
+                    _openapi_row(
+                        "2025三季报",
+                        {
+                            "流动资产合计": "1000",
+                            "非流动资产合计": "2000",
+                            "总资产": "3000",
+                            "流动负债合计": "500",
+                            "非流动负债合计": "500",
+                            "总负债": "1000",
+                            "所有者权益合计": "2000",
+                        },
+                    )
+                ]
+            }
+        },
+        csv_rows=[{"report_date": "2025-09-30", "总资产": "3000"}],
+    )
+    archive_repository.save_dataset(
+        stock_code="000001",
+        stock_name="测试公司",
+        market="ab",
+        dataset=Dataset.CASHFLOW_STATEMENT,
+        request_url="https://finance.pae.baidu.com/selfselect/openapi",
+        request_params={"group": "cash_flow_detail", "code": "000001"},
+        raw_payload={
+            "Result": {
+                "data": [
+                    _openapi_row(
+                        "2025三季报",
+                        {
+                            "经营活动产生的现金流量净额": "1500",
+                            "投资活动产生的现金流量净额": "-700",
+                            "筹资活动产生的现金流量净额": "200",
+                            "现金及现金等价物净增加额": "1000",
+                        },
+                    )
+                ]
+            }
+        },
+        csv_rows=[{"report_date": "2025-09-30", "经营活动产生的现金流量净额": "1500"}],
+    )
+
+    return WorkspaceService(WorkspaceRepository(archive_root=str(tmp_path)))
+
+
+def test_v2_stock_list_returns_full_stock_universe_not_just_archived_subset():
     response = client.get("/api/v2/stocks")
 
     assert response.status_code == 200
     payload = response.json()
     assert payload
+    assert len(payload) > 1000
     assert any(item["stock_code"] == "601012" for item in payload)
+    assert any(item["stock_code"] == "300750" for item in payload)
 
 
 def test_workspace_snapshot_endpoint_uses_archive_data():
@@ -61,13 +165,19 @@ def test_workspace_models_endpoint_returns_analysis_cards():
     assert response.status_code == 200
     payload = response.json()
     assert payload["stock_code"] == "601012"
-    assert len(payload["items"]) >= 10
+    assert len(payload["items"]) >= 16
     keys = {item["key"] for item in payload["items"]}
     assert "dupont" in keys
     assert "cashflow_quality" in keys
+    assert "earnings_quality" in keys
+    assert "capital_intensity" in keys
     assert "solvency_pressure" in keys
     assert "liquidity_risk" in keys
+    assert "debt_service_capacity" in keys
+    assert "capital_structure_resilience" in keys
     assert "valuation_snapshot" in keys
+    assert "shareholder_return_quality" in keys
+    assert "valuation_compression_risk" in keys
 
 
 def test_workspace_insight_context_endpoint_returns_prompt_injection_bundle():
@@ -374,3 +484,72 @@ def test_workspace_insight_generate_endpoint_returns_structured_report(monkeypat
     assert payload["evidence"]
     assert payload["model_version"]
     assert payload["generated_at"]
+
+
+def test_workspace_saved_report_endpoints_round_trip(tmp_path, monkeypatch):
+    from src.api import workspace_service as workspace_service_module
+
+    def fake_analyze(prompt: str, system_prompt: str = "") -> str:
+        assert prompt
+        assert system_prompt
+        return """
+        {
+          "summary": "Archive-backed report persisted successfully.",
+          "highlights": ["Operating cash flow remains positive"],
+          "risks": ["Revenue growth slowed"],
+          "open_questions": ["Need to validate next quarter orders"],
+          "actions": ["Review next quarterly statement"],
+          "evidence": ["roe", "free_cash_flow"]
+        }
+        """
+
+    monkeypatch.setattr(workspace_service_module, "get_llm_client", lambda: type("FakeClient", (), {"analyze": staticmethod(fake_analyze)})())
+
+    service = _seed_minimal_workspace(tmp_path)
+    app.dependency_overrides[get_workspace_service] = lambda: service
+
+    try:
+        generated = client.post("/api/v2/workspace/000001/insights/generate", params={"lang": "en-US"})
+        assert generated.status_code == 200
+        generated_payload = generated.json()
+        assert generated_payload["summary"] == "Archive-backed report persisted successfully."
+
+        latest = client.get("/api/v2/workspace/000001/insights/report", params={"lang": "en-US"})
+        assert latest.status_code == 200
+        latest_payload = latest.json()
+        assert latest_payload["summary"] == generated_payload["summary"]
+        assert latest_payload["report_date"] == "2025-09-30"
+
+        history = client.get("/api/v2/workspace/000001/insights/history", params={"limit": 5})
+        assert history.status_code == 200
+        history_payload = history.json()
+        assert len(history_payload) == 1
+        assert history_payload[0]["stock_code"] == "000001"
+        assert history_payload[0]["markdown_path"].endswith("insight_report.md")
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_workspace_statement_export_endpoints_return_downloadable_files(tmp_path):
+    service = _seed_minimal_workspace(tmp_path)
+    app.dependency_overrides[get_workspace_service] = lambda: service
+
+    try:
+        current_csv = client.get(
+            "/api/v2/workspace/000001/statements/export",
+            params={"statement_key": "balance_sheet", "period": "2025-09-30", "format": "csv", "lang": "zh-CN"},
+        )
+        assert current_csv.status_code == 200
+        assert current_csv.headers["content-type"].startswith("text/csv")
+        assert "attachment;" in current_csv.headers["content-disposition"]
+        assert "流动资产合计".encode("utf-8") in current_csv.content
+
+        history_xlsx = client.get(
+            "/api/v2/workspace/000001/statements/export/all",
+            params={"format": "xlsx", "lang": "zh-CN"},
+        )
+        assert history_xlsx.status_code == 200
+        assert history_xlsx.headers["content-type"] == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        assert history_xlsx.content[:2] == b"PK"
+    finally:
+        app.dependency_overrides.clear()

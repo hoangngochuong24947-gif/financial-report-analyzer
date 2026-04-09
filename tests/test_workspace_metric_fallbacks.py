@@ -69,3 +69,6 @@ def test_workspace_metric_engine_uses_indicator_fallback_for_sparse_archive_snap
     assert values["total_assets"] == "153971435649.18"
     assert values["total_equity"] == "57857069570.65"
     assert values["total_liabilities"] == str(expected_liabilities)
+    assert values["ocf_to_assets"] == "0.0118"
+    assert values["equity_to_liabilities"] == "0.6019"
+    assert values["gross_profit_to_assets"] == "0.3307"

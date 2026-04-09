@@ -27,7 +27,7 @@ function toApiLang(lang?: Lang): string | undefined {
   if (!lang) {
     return undefined;
   }
-  return lang === "en" ? "en-US" : "en-US";
+  return lang === "en" ? "en-US" : "zh-CN";
 }
 
 type WorkspaceGetPath<Body> = {
@@ -101,6 +101,8 @@ type WorkspacePaths = ApiPaths & {
   "/api/v2/workspace/{code}/metrics": WorkspaceGetPath<WorkspaceMetricValuesResponse>;
   "/api/v2/workspace/{code}/models": WorkspaceGetPath<WorkspaceModelResultsResponse>;
   "/api/v2/workspace/{code}/insights/context": WorkspaceGetPath<WorkspaceAiInsightsContextResponse>;
+  "/api/v2/workspace/{code}/insights/report": WorkspaceGetPath<WorkspaceInsightReportResponse>;
+  "/api/v2/workspace/{code}/insights/history": WorkspaceGetPath<WorkspaceInsightHistoryItem[]>;
   "/api/v2/workspace/{code}/statements": WorkspaceGetPath<WorkspaceStatementsResponse>;
   "/api/v2/workspace/{code}/insights/generate": WorkspacePostPath<WorkspaceInsightReportResponse>;
 };
@@ -274,7 +276,15 @@ export interface WorkspaceInsightReportResponse {
   stock_code?: string;
   stock_name?: string;
   report_date?: string;
+  lang?: string;
   generated_at?: string;
+  model_version?: string;
+  summary?: string;
+  highlights?: string[];
+  risks?: string[];
+  open_questions?: string[];
+  actions?: string[];
+  evidence?: string[];
   executive_summary?: string;
   profitability_analysis?: string;
   solvency_analysis?: string;
@@ -287,6 +297,17 @@ export interface WorkspaceInsightReportResponse {
   risk_warnings?: string[];
   sections?: WorkspaceInsightSection[];
   [key: string]: unknown;
+}
+
+export interface WorkspaceInsightHistoryItem {
+  stock_code: string;
+  stock_name: string;
+  report_date: string;
+  lang: string;
+  generated_at: string;
+  model_version: string;
+  json_path: string;
+  markdown_path: string;
 }
 
 export interface WorkspaceArchiveItem {
@@ -373,6 +394,68 @@ export async function generateWorkspaceInsights(
     params: { path: { code }, query: { lang: toApiLang(lang) } },
   });
   return unwrapData("POST", "/api/v2/workspace/{code}/insights/generate", result);
+}
+
+export async function getWorkspaceSavedInsightReport(
+  code: string,
+  lang?: Lang,
+): Promise<WorkspaceInsightReportResponse | null> {
+  const result = await workspaceClient.GET("/api/v2/workspace/{code}/insights/report", {
+    params: { path: { code }, query: { lang: toApiLang(lang) } },
+  });
+
+  if (hasData(result)) {
+    return result.data;
+  }
+
+  const message = toMessage("GET", "/api/v2/workspace/{code}/insights/report", result.error);
+  if (message.includes("No stored insight report")) {
+    return null;
+  }
+
+  throw new Error(message);
+}
+
+export async function listWorkspaceInsightHistory(
+  code: string,
+  limit = 20,
+): Promise<WorkspaceInsightHistoryItem[]> {
+  const result = await workspaceClient.GET("/api/v2/workspace/{code}/insights/history", {
+    params: { path: { code }, query: { limit } },
+  });
+  return unwrapData("GET", "/api/v2/workspace/{code}/insights/history", result);
+}
+
+export function buildWorkspaceStatementExportUrl(
+  code: string,
+  statementKey: string,
+  period: string,
+  format: "csv" | "xlsx",
+  lang?: Lang,
+): string {
+  const params = new URLSearchParams({
+    statement_key: statementKey,
+    period,
+    format,
+  });
+  const apiLang = toApiLang(lang);
+  if (apiLang) {
+    params.set("lang", apiLang);
+  }
+  return `/api/v2/workspace/${code}/statements/export?${params.toString()}`;
+}
+
+export function buildWorkspaceStatementHistoryExportUrl(
+  code: string,
+  format: "csv" | "xlsx" = "xlsx",
+  lang?: Lang,
+): string {
+  const params = new URLSearchParams({ format });
+  const apiLang = toApiLang(lang);
+  if (apiLang) {
+    params.set("lang", apiLang);
+  }
+  return `/api/v2/workspace/${code}/statements/export/all?${params.toString()}`;
 }
 
 export function hasWorkspaceStatements(data: WorkspaceStatementsResponse | undefined): boolean {

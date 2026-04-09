@@ -1,13 +1,17 @@
 """Workspace routes for archive-first v2 APIs."""
 
+from __future__ import annotations
+
 from datetime import datetime
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response, StreamingResponse
 
 from src.api.dependencies import get_workspace_service
 from src.api.workspace_service import WorkspaceService
-from src.models.workspace_metrics import WorkspaceInsightGenerateRequest
+from src.models.workspace_metrics import InsightReportResponse, WorkspaceInsightGenerateRequest
+from src.storage.report_repository import ReportRepository
 from src.utils.logger import logger
 
 router = APIRouter(prefix="/api/v2", tags=["workspace"])
@@ -32,6 +36,12 @@ def _requested_lang(lang: Optional[str], fallback: str = "zh") -> str:
         return fallback
     lowered = lang.lower()
     return "en" if lowered.startswith("en") else "zh"
+
+
+def _service_lang(lang: Optional[str]) -> str:
+    if not lang:
+        return "zh-CN"
+    return "en-US" if lang.lower().startswith("en") else "zh-CN"
 
 
 def _build_statement_payload(detail: Any, stock_code: str) -> dict[str, Any]:
@@ -74,26 +84,36 @@ def _build_legacy_insight_payload(report: Any) -> dict[str, Any]:
         payload = dict(report)
     else:
         payload = report.model_dump(mode="json")
+
+    summary = payload.get("summary", "")
     payload.update(
         {
-            "executive_summary": payload.get("summary", ""),
-            "profitability_analysis": payload.get("summary", ""),
-            "solvency_analysis": "",
-            "efficiency_analysis": "",
-            "cashflow_analysis": "",
-            "trend_analysis": "",
-            "strengths": payload.get("highlights", []),
-            "weaknesses": [],
-            "recommendations": payload.get("actions", []),
-            "risk_warnings": payload.get("risks", []),
+            "executive_summary": payload.get("executive_summary", summary),
+            "profitability_analysis": payload.get("profitability_analysis", summary),
+            "solvency_analysis": payload.get("solvency_analysis", ""),
+            "efficiency_analysis": payload.get("efficiency_analysis", ""),
+            "cashflow_analysis": payload.get("cashflow_analysis", ""),
+            "trend_analysis": payload.get("trend_analysis", ""),
+            "strengths": payload.get("strengths", payload.get("highlights", [])),
+            "weaknesses": payload.get("weaknesses", []),
+            "recommendations": payload.get("recommendations", payload.get("actions", [])),
+            "risk_warnings": payload.get("risk_warnings", payload.get("risks", [])),
         }
     )
     return payload
 
 
+def _statement_export_filename(stock_code: str, statement_key: str, period: str, file_ext: str) -> str:
+    return f"{stock_code}_{statement_key}_{period}.{file_ext}"
+
+
+def _history_export_filename(stock_code: str, file_ext: str) -> str:
+    return f"{stock_code}_statement_history.{file_ext}"
+
+
 @router.get("/workspaces")
 async def list_workspaces(
-    limit: int = Query(20, ge=1, le=200, description="Number of archive-backed workspaces"),
+    limit: int = Query(20, ge=1, le=5000, description="Number of archive-backed workspaces"),
     workspace_service: WorkspaceService = Depends(get_workspace_service),
 ):
     try:
@@ -132,7 +152,7 @@ async def get_workspace_snapshot(
     workspace_service: WorkspaceService = Depends(get_workspace_service),
 ):
     try:
-        return workspace_service.get_snapshot_response(code, lang=lang or "zh-CN").model_dump(mode="json")
+        return workspace_service.get_snapshot_response(code, lang=_service_lang(lang)).model_dump(mode="json")
     except Exception as exc:
         raise _handle_workspace_error(exc, code) from exc
 
@@ -144,7 +164,7 @@ async def get_workspace_metric_catalog(
     workspace_service: WorkspaceService = Depends(get_workspace_service),
 ):
     try:
-        return workspace_service.get_metric_catalog_response(code, lang=lang or "zh-CN").model_dump(mode="json")
+        return workspace_service.get_metric_catalog_response(code, lang=_service_lang(lang)).model_dump(mode="json")
     except Exception as exc:
         raise _handle_workspace_error(exc, code) from exc
 
@@ -156,7 +176,7 @@ async def get_workspace_metric_values(
     workspace_service: WorkspaceService = Depends(get_workspace_service),
 ):
     try:
-        return workspace_service.get_metric_values_response(code, lang=lang or "zh-CN").model_dump(mode="json")
+        return workspace_service.get_metric_values_response(code, lang=_service_lang(lang)).model_dump(mode="json")
     except Exception as exc:
         raise _handle_workspace_error(exc, code) from exc
 
@@ -168,7 +188,7 @@ async def get_workspace_models(
     workspace_service: WorkspaceService = Depends(get_workspace_service),
 ):
     try:
-        return workspace_service.get_model_response(code, lang=lang or "zh-CN").model_dump(mode="json")
+        return workspace_service.get_model_response(code, lang=_service_lang(lang)).model_dump(mode="json")
     except Exception as exc:
         raise _handle_workspace_error(exc, code) from exc
 
@@ -180,7 +200,35 @@ async def get_workspace_insight_context(
     workspace_service: WorkspaceService = Depends(get_workspace_service),
 ):
     try:
-        return workspace_service.get_insight_context_response(code, lang=lang or "zh-CN").model_dump(mode="json")
+        return workspace_service.get_insight_context_response(code, lang=_service_lang(lang)).model_dump(mode="json")
+    except Exception as exc:
+        raise _handle_workspace_error(exc, code) from exc
+
+
+@router.get("/workspace/{code}/insights/report")
+async def get_workspace_saved_insight_report(
+    code: str,
+    period: Optional[str] = Query(None, description="Reporting period"),
+    lang: Optional[str] = Query(None, description="Response language"),
+    workspace_service: WorkspaceService = Depends(get_workspace_service),
+):
+    try:
+        report = workspace_service.get_saved_insight_report(code, lang=_service_lang(lang), period=period)
+        payload = _build_legacy_insight_payload(report)
+        payload["lang"] = _requested_lang(lang, fallback=payload.get("lang", "zh"))
+        return payload
+    except Exception as exc:
+        raise _handle_workspace_error(exc, code) from exc
+
+
+@router.get("/workspace/{code}/insights/history")
+async def list_workspace_saved_insight_reports(
+    code: str,
+    limit: int = Query(20, ge=1, le=100, description="Stored report history size"),
+    workspace_service: WorkspaceService = Depends(get_workspace_service),
+):
+    try:
+        return [item.model_dump(mode="json") for item in workspace_service.list_saved_insight_reports(code, limit=limit)]
     except Exception as exc:
         raise _handle_workspace_error(exc, code) from exc
 
@@ -193,10 +241,107 @@ async def get_workspace_statements(
     workspace_service: WorkspaceService = Depends(get_workspace_service),
 ):
     try:
-        detail = workspace_service.get_statement_detail_response(code, period=period, lang=lang or "zh-CN")
+        detail = workspace_service.get_statement_detail_response(code, period=period, lang=_service_lang(lang))
         payload = _build_statement_payload(detail, code)
         payload["lang"] = _requested_lang(lang, fallback=payload["lang"])
         return payload
+    except Exception as exc:
+        raise _handle_workspace_error(exc, code) from exc
+
+
+@router.get("/workspace/{code}/statements/export")
+async def export_workspace_statement(
+    code: str,
+    statement_key: str = Query(..., description="Statement key"),
+    period: Optional[str] = Query(None, description="Reporting period"),
+    format: str = Query("csv", pattern="^(csv|xlsx)$", description="Export format"),
+    lang: Optional[str] = Query(None, description="Response language"),
+    workspace_service: WorkspaceService = Depends(get_workspace_service),
+):
+    try:
+        stock_name, selected_period, rows = workspace_service.export_statement_rows(
+            code,
+            statement_key=statement_key,
+            period=period,
+            lang=_service_lang(lang),
+        )
+        if format == "xlsx":
+            body = ReportRepository.rows_to_excel_bytes(
+                {
+                    statement_key: [
+                        {
+                            "label": row.label,
+                            "section": row.section or "",
+                            "display_value": row.display_value,
+                            "value": row.value,
+                            "unit": row.unit,
+                            "source": row.source,
+                            "is_estimated": row.is_estimated,
+                        }
+                        for row in rows
+                    ]
+                }
+            )
+            filename = _statement_export_filename(code, statement_key, selected_period, "xlsx")
+            return Response(
+                content=body,
+                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+            )
+
+        body = ReportRepository.rows_to_csv_bytes(rows)
+        filename = _statement_export_filename(code, statement_key, selected_period, "csv")
+        return Response(
+            content=body,
+            media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+    except Exception as exc:
+        raise _handle_workspace_error(exc, code) from exc
+
+
+@router.get("/workspace/{code}/statements/export/all")
+async def export_workspace_statement_history(
+    code: str,
+    format: str = Query("xlsx", pattern="^(csv|xlsx)$", description="Export format"),
+    lang: Optional[str] = Query(None, description="Response language"),
+    workspace_service: WorkspaceService = Depends(get_workspace_service),
+):
+    try:
+        _, sheets = workspace_service.export_all_statement_rows(code, lang=_service_lang(lang))
+        if format == "csv":
+            csv_parts = []
+            for sheet_name, rows in sheets.items():
+                csv_parts.append(f"# {sheet_name}")
+                csv_parts.append(
+                    ReportRepository.rows_to_csv_bytes(
+                        [
+                            {
+                                "label": str(row.get("label", "")),
+                                "section": str(row.get("section", "")),
+                                "display_value": str(row.get("display_value", "")),
+                                "value": row.get("value"),
+                                "unit": str(row.get("unit", "")),
+                                "source": str(row.get("source", "")),
+                                "is_estimated": bool(row.get("is_estimated", False)),
+                            }
+                            for row in rows
+                        ]
+                    ).decode("utf-8-sig")
+                )
+            filename = _history_export_filename(code, "csv")
+            return Response(
+                content="\n".join(csv_parts).encode("utf-8-sig"),
+                media_type="text/csv; charset=utf-8",
+                headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+            )
+
+        filename = _history_export_filename(code, "xlsx")
+        return Response(
+            content=ReportRepository.rows_to_excel_bytes(sheets),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
     except Exception as exc:
         raise _handle_workspace_error(exc, code) from exc
 
@@ -210,46 +355,51 @@ async def generate_workspace_insights(
 ):
     requested_lang = request.lang if request and request.lang else lang
     requested_period = request.period if request else None
+    service_lang = _service_lang(requested_lang)
     try:
-        report = workspace_service.generate_insight_report(
+        report = workspace_service.generate_and_save_insight_report(
             code,
-            lang=requested_lang or "zh-CN",
+            lang=service_lang,
             period=requested_period,
         )
     except RuntimeError as exc:
         logger.warning("Insight generation fell back to archive summary for {}: {}", code, exc)
         try:
-            locale = "en-US" if _requested_lang(requested_lang) == "en" else "zh-CN"
             bundle = workspace_service.get_metric_bundle(code)
-            model_response = workspace_service.get_model_response(code, locale)
-            summary = (
-                f"Archive-only fallback insight for {bundle.stock_name or bundle.stock_code}. "
-                f"ROE={next((item.value for item in bundle.values if item.key == 'roe'), 'N/A')}, "
-                f"Debt/Asset={next((item.value for item in bundle.values if item.key == 'debt_to_asset_ratio'), 'N/A')}."
-                if locale == "en-US"
-                else f"{bundle.stock_name or bundle.stock_code} 当前返回的是归档数据降级洞察。"
-                f"ROE={next((item.value for item in bundle.values if item.key == 'roe'), 'N/A')}，"
-                f"资产负债率={next((item.value for item in bundle.values if item.key == 'debt_to_asset_ratio'), 'N/A')}。"
+            model_response = workspace_service.get_model_response(code, service_lang)
+            if service_lang == "en-US":
+                summary = (
+                    f"Archive-only fallback insight for {bundle.stock_name or bundle.stock_code}. "
+                    f"ROE={next((item.value for item in bundle.values if item.key == 'roe'), 'N/A')}, "
+                    f"Debt/Asset={next((item.value for item in bundle.values if item.key == 'debt_to_asset_ratio'), 'N/A')}."
+                )
+                actions = ["Configure DEEPSEEK_API_KEY to enable full AI-generated narrative."]
+            else:
+                summary = (
+                    f"{bundle.stock_name or bundle.stock_code} 当前返回的是归档数据降级洞察。"
+                    f"ROE={next((item.value for item in bundle.values if item.key == 'roe'), 'N/A')}，"
+                    f"资产负债率={next((item.value for item in bundle.values if item.key == 'debt_to_asset_ratio'), 'N/A')}。"
+                )
+                actions = ["配置 DEEPSEEK_API_KEY 后可启用完整 AI 叙事分析。"]
+
+            fallback_report = InsightReportResponse(
+                stock_code=bundle.stock_code,
+                stock_name=bundle.stock_name,
+                report_date=requested_period or bundle.report_date,
+                lang=service_lang,
+                summary=summary,
+                highlights=[item.summary for item in model_response.items[:2] if item.summary],
+                risks=[item.summary for item in model_response.items[2:4] if item.summary],
+                open_questions=[],
+                actions=actions,
+                evidence=[item.key for item in bundle.values[:5]],
+                generated_at=datetime.utcnow().isoformat() + "Z",
+                model_version="workspace-insights-v1",
             )
-            report_payload = {
-                "stock_code": bundle.stock_code,
-                "stock_name": bundle.stock_name,
-                "report_date": requested_period or bundle.report_date,
-                "lang": _requested_lang(requested_lang),
-                "summary": summary,
-                "highlights": [item.summary for item in model_response.items[:2] if item.summary],
-                "risks": [item.summary for item in model_response.items[2:4] if item.summary],
-                "open_questions": [],
-                "actions": [
-                    "Configure DEEPSEEK_API_KEY to enable full AI-generated narrative."
-                    if locale == "en-US"
-                    else "配置 DEEPSEEK_API_KEY 后可启用完整 AI 叙事分析。"
-                ],
-                "evidence": [item.key for item in bundle.values[:5]],
-                "generated_at": datetime.utcnow().isoformat() + "Z",
-                "model_version": "workspace-insights-v1",
-            }
-            return _build_legacy_insight_payload(report_payload)
+            workspace_service.save_insight_report(fallback_report)
+            payload = _build_legacy_insight_payload(fallback_report)
+            payload["lang"] = _requested_lang(requested_lang, fallback=payload.get("lang", "zh"))
+            return payload
         except Exception as inner_exc:
             raise _handle_workspace_error(inner_exc, code) from inner_exc
     except Exception as exc:

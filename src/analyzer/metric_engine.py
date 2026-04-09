@@ -36,6 +36,11 @@ class WorkspaceMetricEngine:
         MetricCatalogItem(key="free_cash_flow", label="Free Cash Flow", group="cashflow", description="Operating cash flow minus capital expenditure proxy.", unit="amount"),
         MetricCatalogItem(key="cash_to_profit_ratio", label="Cash to Profit Ratio", group="cashflow", description="Operating cash flow divided by net income.", unit="ratio"),
         MetricCatalogItem(key="operating_cashflow_margin", label="Operating Cash Flow Margin", group="cashflow", description="Operating cash flow divided by revenue.", unit="ratio"),
+        MetricCatalogItem(key="ocf_to_assets", label="OCF to Assets", group="cashflow", description="Operating cash flow divided by total assets.", unit="ratio"),
+        MetricCatalogItem(key="ocf_to_liabilities", label="OCF to Liabilities", group="cashflow", description="Operating cash flow divided by total liabilities.", unit="ratio"),
+        MetricCatalogItem(key="fcf_margin", label="FCF Margin", group="cashflow", description="Free cash flow divided by revenue.", unit="ratio"),
+        MetricCatalogItem(key="capex_proxy", label="Capex Proxy", group="cashflow", description="Capital expenditure proxy based on investing cash flow outflow.", unit="amount"),
+        MetricCatalogItem(key="capex_intensity", label="Capex Intensity", group="cashflow", description="Capital expenditure proxy divided by revenue.", unit="ratio"),
         MetricCatalogItem(key="net_cashflow", label="Net Cash Flow", group="cashflow", description="Net increase in cash.", unit="amount"),
         MetricCatalogItem(key="investing_cashflow", label="Investing Cash Flow", group="cashflow", description="Cash flow from investing activities.", unit="amount"),
         MetricCatalogItem(key="financing_cashflow", label="Financing Cash Flow", group="cashflow", description="Cash flow from financing activities.", unit="amount"),
@@ -44,13 +49,20 @@ class WorkspaceMetricEngine:
         MetricCatalogItem(key="operating_profit_yoy", label="Operating Profit YoY", group="trend", description="Year-over-year growth in operating profit.", unit="ratio"),
         MetricCatalogItem(key="operating_cashflow_yoy", label="Operating Cash Flow YoY", group="trend", description="Year-over-year growth in operating cash flow.", unit="ratio"),
         MetricCatalogItem(key="accrual_ratio", label="Accrual Ratio", group="risk", description="Net income minus operating cash flow divided by total assets.", unit="ratio"),
+        MetricCatalogItem(key="profit_to_ocf_gap", label="Profit to OCF Gap", group="risk", description="Absolute gap between net income and operating cash flow.", unit="amount"),
+        MetricCatalogItem(key="gross_profit_to_assets", label="Gross Profit to Assets", group="risk", description="Gross profit divided by total assets.", unit="ratio"),
         MetricCatalogItem(key="liability_to_ocf", label="Liability to OCF", group="risk", description="Total liabilities divided by operating cash flow.", unit="ratio"),
         MetricCatalogItem(key="fcf_to_debt", label="FCF to Debt", group="risk", description="Free cash flow divided by total liabilities.", unit="ratio"),
+        MetricCatalogItem(key="net_cashflow_to_liabilities", label="Net Cash Flow to Liabilities", group="risk", description="Net cash flow divided by total liabilities.", unit="ratio"),
+        MetricCatalogItem(key="equity_to_liabilities", label="Equity to Liabilities", group="risk", description="Total equity divided by total liabilities.", unit="ratio"),
+        MetricCatalogItem(key="long_term_capital_ratio", label="Long-term Capital Ratio", group="risk", description="Long-term capital divided by non-current assets.", unit="ratio"),
         MetricCatalogItem(key="pe_ttm", label="PE TTM", group="valuation", description="Trailing twelve month price-to-earnings ratio.", unit="ratio"),
         MetricCatalogItem(key="pb_ratio", label="PB Ratio", group="valuation", description="Price-to-book ratio.", unit="ratio"),
         MetricCatalogItem(key="ps_ratio", label="PS Ratio", group="valuation", description="Price-to-sales ratio.", unit="ratio"),
         MetricCatalogItem(key="earnings_yield", label="Earnings Yield", group="valuation", description="Inverse of PE TTM.", unit="ratio"),
         MetricCatalogItem(key="book_to_price", label="Book to Price", group="valuation", description="Inverse of PB ratio.", unit="ratio"),
+        MetricCatalogItem(key="sales_to_price", label="Sales to Price", group="valuation", description="Inverse of price-to-sales ratio.", unit="ratio"),
+        MetricCatalogItem(key="valuation_buffer", label="Valuation Buffer", group="valuation", description="Combined earnings yield and book-to-price proxy.", unit="ratio"),
         MetricCatalogItem(key="total_assets", label="Total Assets", group="capital", description="Latest total assets.", unit="amount"),
         MetricCatalogItem(key="total_liabilities", label="Total Liabilities", group="capital", description="Latest total liabilities.", unit="amount"),
         MetricCatalogItem(key="total_equity", label="Total Equity", group="capital", description="Latest total equity.", unit="amount"),
@@ -60,9 +72,11 @@ class WorkspaceMetricEngine:
         "working_capital",
         "operating_cashflow",
         "free_cash_flow",
+        "capex_proxy",
         "net_cashflow",
         "investing_cashflow",
         "financing_cashflow",
+        "profit_to_ocf_gap",
         "total_assets",
         "total_liabilities",
         "total_equity",
@@ -124,6 +138,8 @@ class WorkspaceMetricEngine:
         )
         operating_cashflow = cashflow.operating_cashflow if cashflow else Decimal("0")
         free_cash_flow = cashflow.free_cash_flow if cashflow else Decimal("0")
+        capex_proxy = abs(cashflow_statement.investing_cashflow) if cashflow_statement else Decimal("0")
+        gross_profit = income_statement.total_revenue - income_statement.operating_cost
 
         raw_values: Dict[str, Decimal] = {
             "roe": roe,
@@ -149,6 +165,11 @@ class WorkspaceMetricEngine:
                 operating_cashflow,
                 income_statement.total_revenue,
             ),
+            "ocf_to_assets": safe_divide(operating_cashflow, total_assets),
+            "ocf_to_liabilities": safe_divide(operating_cashflow, total_liabilities),
+            "fcf_margin": safe_divide(free_cash_flow, income_statement.total_revenue),
+            "capex_proxy": capex_proxy,
+            "capex_intensity": safe_divide(capex_proxy, income_statement.total_revenue),
             "net_cashflow": cashflow_statement.net_cashflow if cashflow_statement else Decimal("0"),
             "investing_cashflow": cashflow_statement.investing_cashflow if cashflow_statement else Decimal("0"),
             "financing_cashflow": cashflow_statement.financing_cashflow if cashflow_statement else Decimal("0"),
@@ -161,13 +182,29 @@ class WorkspaceMetricEngine:
                 else Decimal("0")
             ),
             "accrual_ratio": safe_divide(net_income - operating_cashflow, total_assets),
+            "profit_to_ocf_gap": net_income - operating_cashflow,
+            "gross_profit_to_assets": safe_divide(gross_profit, total_assets),
             "liability_to_ocf": safe_divide(total_liabilities, operating_cashflow),
             "fcf_to_debt": safe_divide(free_cash_flow, total_liabilities),
+            "net_cashflow_to_liabilities": safe_divide(
+                cashflow_statement.net_cashflow if cashflow_statement else Decimal("0"),
+                total_liabilities,
+            ),
+            "equity_to_liabilities": safe_divide(total_equity, total_liabilities),
+            "long_term_capital_ratio": safe_divide(
+                total_equity + balance_sheet.total_non_current_liabilities,
+                balance_sheet.total_non_current_assets,
+            ),
             "pe_ttm": pe_ttm,
             "pb_ratio": pb_ratio,
             "ps_ratio": ps_ratio,
             "earnings_yield": safe_divide(Decimal("1"), pe_ttm) if pe_ttm > 0 else Decimal("0"),
             "book_to_price": safe_divide(Decimal("1"), pb_ratio) if pb_ratio > 0 else Decimal("0"),
+            "sales_to_price": safe_divide(Decimal("1"), ps_ratio) if ps_ratio > 0 else Decimal("0"),
+            "valuation_buffer": (
+                (safe_divide(Decimal("1"), pe_ttm) if pe_ttm > 0 else Decimal("0"))
+                + (safe_divide(Decimal("1"), pb_ratio) if pb_ratio > 0 else Decimal("0"))
+            ),
             "total_assets": total_assets,
             "total_liabilities": total_liabilities,
             "total_equity": total_equity,
@@ -271,5 +308,6 @@ class WorkspaceMetricEngine:
             f"ROE={values['roe'].quantize(Decimal('0.0001'))}, "
             f"Debt/Asset={values['debt_to_asset_ratio'].quantize(Decimal('0.0001'))}, "
             f"OCF Margin={values['operating_cashflow_margin'].quantize(Decimal('0.0001'))}, "
-            f"FCF={values['free_cash_flow'].quantize(Decimal('0.01'))}"
+            f"FCF={values['free_cash_flow'].quantize(Decimal('0.01'))}, "
+            f"Valuation Buffer={values['valuation_buffer'].quantize(Decimal('0.0001'))}"
         )

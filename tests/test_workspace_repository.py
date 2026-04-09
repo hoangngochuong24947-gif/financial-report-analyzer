@@ -1,4 +1,5 @@
 from datetime import date
+from pathlib import Path
 from decimal import Decimal
 
 from src.crawler.interfaces import Dataset
@@ -126,3 +127,52 @@ def test_workspace_repository_loads_archive_workspace(tmp_path):
     assert summaries[0].stock_code == "000001"
     assert summaries[0].latest_report_date == "2025-09-30"
     assert summaries[0].dataset_count == 3
+
+
+def test_workspace_repository_list_workspaces_is_not_capped_by_manifest_count(tmp_path, monkeypatch):
+    from src.crawler.interfaces import FinancialSnapshot
+    from src.models.workspace_metrics import WorkspaceArchiveItem
+    from src.storage.workspace_repository import ArchiveWorkspace, WorkspaceRepository
+
+    root = tmp_path / "raw" / "baidu_finance"
+    stock_codes = [f"{600000 + index:06d}" for index in range(251)]
+    for code in stock_codes:
+        (root / code / "manifests").mkdir(parents=True, exist_ok=True)
+
+    def _fake_load_workspace(self, stock_code: str) -> ArchiveWorkspace:
+        return ArchiveWorkspace(
+            stock_code=stock_code,
+            stock_name=f"Test {stock_code}",
+            market="ab",
+            snapshot=FinancialSnapshot(
+                stock_code=stock_code,
+                balance_sheets=[],
+                income_statements=[],
+                cashflow_statements=[],
+            ),
+            statement_details={},
+            indicator_snapshot={},
+            archives=[
+                WorkspaceArchiveItem(
+                    stock_code=stock_code,
+                    stock_name=f"Test {stock_code}",
+                    market="ab",
+                    dataset="income_statement",
+                    fetched_at="20260409T000000Z",
+                    raw_path=str(Path("data") / "raw" / "baidu_finance" / stock_code / "income.json"),
+                    csv_path=str(Path("data") / "processed" / "baidu_finance" / stock_code / "income.csv"),
+                    manifest_path=str(Path("data") / "raw" / "baidu_finance" / stock_code / "manifests" / "manifest.json"),
+                    row_count=1,
+                    status="success",
+                    report_date="2025-12-31",
+                )
+            ],
+            latest_report_date="2025-12-31",
+        )
+
+    monkeypatch.setattr(WorkspaceRepository, "load_workspace", _fake_load_workspace)
+
+    repository = WorkspaceRepository(archive_root=str(tmp_path))
+    summaries = repository.list_workspaces(limit=300)
+
+    assert len(summaries) == len(stock_codes)

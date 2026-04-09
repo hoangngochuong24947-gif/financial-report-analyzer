@@ -128,3 +128,10 @@ class ArchiveRepository:
             if len(items) >= limit:
                 break
         return items
+
+    def list_stock_codes(self) -> List[str]:
+        root = self._root / "raw" / "baidu_finance"
+        if not root.exists():
+            return []
+
+        return sorted(path.name for path in root.iterdir() if path.is_dir())
