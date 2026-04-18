@@ -79,9 +79,24 @@ class ReportRepository:
         return items[:limit]
 
     @staticmethod
-    def rows_to_csv_bytes(rows: list[StatementDetailRow]) -> bytes:
-        frame = pd.DataFrame(
-            [
+    def rows_to_csv_bytes(rows: list[StatementDetailRow] | list[dict[str, object]]) -> bytes:
+        normalized_rows = []
+        for row in rows:
+            if isinstance(row, dict):
+                normalized_rows.append(
+                    {
+                        "label": str(row.get("label", "")),
+                        "section": str(row.get("section", "")),
+                        "display_value": str(row.get("display_value", "")),
+                        "value": row.get("value"),
+                        "unit": str(row.get("unit", "")),
+                        "source": str(row.get("source", "")),
+                        "is_estimated": bool(row.get("is_estimated", False)),
+                    }
+                )
+                continue
+
+            normalized_rows.append(
                 {
                     "label": row.label,
                     "section": row.section or "",
@@ -91,9 +106,9 @@ class ReportRepository:
                     "source": row.source,
                     "is_estimated": row.is_estimated,
                 }
-                for row in rows
-            ]
-        )
+            )
+
+        frame = pd.DataFrame(normalized_rows)
         return frame.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
 
     @staticmethod

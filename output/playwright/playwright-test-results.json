@@ -1,0 +1,58 @@
+{
+  "requests": [
+    {
+      "url": "http://127.0.0.1:5173/src/api/sdk.ts",
+      "status": 200,
+      "duration_s": 0.02
+    },
+    {
+      "url": "http://127.0.0.1:5173/src/api/workspace.ts",
+      "status": 200,
+      "duration_s": 0.02
+    },
+    {
+      "url": "http://127.0.0.1:5173/src/api/client.ts",
+      "status": 200,
+      "duration_s": 0.01
+    },
+    {
+      "url": "http://127.0.0.1:8000/api/v2/stocks",
+      "status": 200,
+      "duration_s": 0.34
+    }
+  ],
+  "console_errors": [],
+  "page_errors": [],
+  "steps": [
+    {
+      "step": "open metrics page",
+      "ok": true,
+      "detail": "loaded route http://127.0.0.1:5173/metrics"
+    },
+    {
+      "step": "stock list loaded",
+      "ok": true,
+      "detail": "200 items visible after 0.91s; first='浦发银行\\n600000\\n主板 · 待归档'"
+    },
+    {
+      "step": "route tabs present",
+      "ok": true,
+      "detail": "['总览\\n财报与关键指标', '模型\\n结构与风险判断', '报告\\nAI 研究结论']"
+    },
+    {
+      "step": "select first stock",
+      "ok": true,
+      "detail": "clicked first stock item and waited 3s"
+    },
+    {
+      "step": "navigate to models",
+      "ok": true,
+      "detail": "http://127.0.0.1:5173/models"
+    },
+    {
+      "step": "navigate to insights",
+      "ok": true,
+      "detail": "http://127.0.0.1:5173/insights"
+    }
+  ]
+}

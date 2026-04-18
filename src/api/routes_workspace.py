@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import Response
 
 from src.api.dependencies import get_workspace_service
 from src.api.workspace_service import WorkspaceService
@@ -34,8 +34,7 @@ def _handle_workspace_error(exc: Exception, stock_code: str | None = None) -> HT
 def _requested_lang(lang: Optional[str], fallback: str = "zh") -> str:
     if not lang:
         return fallback
-    lowered = lang.lower()
-    return "en" if lowered.startswith("en") else "zh"
+    return "en" if lang.lower().startswith("en") else "zh"
 
 
 def _service_lang(lang: Optional[str]) -> str:
@@ -80,11 +79,7 @@ def _build_statement_payload(detail: Any, stock_code: str) -> dict[str, Any]:
 
 
 def _build_legacy_insight_payload(report: Any) -> dict[str, Any]:
-    if isinstance(report, dict):
-        payload = dict(report)
-    else:
-        payload = report.model_dump(mode="json")
-
+    payload = dict(report) if isinstance(report, dict) else report.model_dump(mode="json")
     summary = payload.get("summary", "")
     payload.update(
         {
@@ -259,7 +254,7 @@ async def export_workspace_statement(
     workspace_service: WorkspaceService = Depends(get_workspace_service),
 ):
     try:
-        stock_name, selected_period, rows = workspace_service.export_statement_rows(
+        _, selected_period, rows = workspace_service.export_statement_rows(
             code,
             statement_key=statement_key,
             period=period,
@@ -310,25 +305,10 @@ async def export_workspace_statement_history(
     try:
         _, sheets = workspace_service.export_all_statement_rows(code, lang=_service_lang(lang))
         if format == "csv":
-            csv_parts = []
+            csv_parts: list[str] = []
             for sheet_name, rows in sheets.items():
                 csv_parts.append(f"# {sheet_name}")
-                csv_parts.append(
-                    ReportRepository.rows_to_csv_bytes(
-                        [
-                            {
-                                "label": str(row.get("label", "")),
-                                "section": str(row.get("section", "")),
-                                "display_value": str(row.get("display_value", "")),
-                                "value": row.get("value"),
-                                "unit": str(row.get("unit", "")),
-                                "source": str(row.get("source", "")),
-                                "is_estimated": bool(row.get("is_estimated", False)),
-                            }
-                            for row in rows
-                        ]
-                    ).decode("utf-8-sig")
-                )
+                csv_parts.append(ReportRepository.rows_to_csv_bytes(rows).decode("utf-8-sig"))
             filename = _history_export_filename(code, "csv")
             return Response(
                 content="\n".join(csv_parts).encode("utf-8-sig"),
@@ -356,6 +336,14 @@ async def generate_workspace_insights(
     requested_lang = request.lang if request and request.lang else lang
     requested_period = request.period if request else None
     service_lang = _service_lang(requested_lang)
+
+    latest_period = workspace_service.get_metric_bundle(code).report_date
+    if requested_period and requested_period != latest_period:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Historical-period insight generation is not supported yet. Latest available period is {latest_period}.",
+        )
+
     try:
         report = workspace_service.generate_and_save_insight_report(
             code,
@@ -393,7 +381,7 @@ async def generate_workspace_insights(
                 open_questions=[],
                 actions=actions,
                 evidence=[item.key for item in bundle.values[:5]],
-                generated_at=datetime.utcnow().isoformat() + "Z",
+                generated_at=datetime.now(timezone.utc).isoformat(),
                 model_version="workspace-insights-v1",
             )
             workspace_service.save_insight_report(fallback_report)

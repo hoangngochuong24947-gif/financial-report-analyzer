@@ -19,6 +19,8 @@ type CrawlJobState = {
   result?: unknown;
 };
 
+const WORKSPACE_ARCHIVE_LIMIT = 5000;
+
 function getArchiveStatusLabel(lang: Lang, archived: boolean): string {
   if (archived) {
     return lang === "zh" ? "已归档" : "Archived";
@@ -85,7 +87,7 @@ export default function App() {
 
   const workspacesQuery = useQuery({
     queryKey: ["workspaces"],
-    queryFn: () => listWorkspaces(200, lang),
+    queryFn: () => listWorkspaces(WORKSPACE_ARCHIVE_LIMIT, lang),
     staleTime: 60_000,
   });
 

@@ -1,4 +1,4 @@
-import { apiClient } from "./client";
+import { apiBaseUrl, apiClient } from "./client";
 import type { Client } from "openapi-fetch";
 import type { paths as ApiPaths } from "./generated/schema";
 import type { Lang } from "../lib/i18n";
@@ -442,7 +442,7 @@ export function buildWorkspaceStatementExportUrl(
   if (apiLang) {
     params.set("lang", apiLang);
   }
-  return `/api/v2/workspace/${code}/statements/export?${params.toString()}`;
+  return `${apiBaseUrl}/api/v2/workspace/${code}/statements/export?${params.toString()}`;
 }
 
 export function buildWorkspaceStatementHistoryExportUrl(
@@ -455,7 +455,7 @@ export function buildWorkspaceStatementHistoryExportUrl(
   if (apiLang) {
     params.set("lang", apiLang);
   }
-  return `/api/v2/workspace/${code}/statements/export/all?${params.toString()}`;
+  return `${apiBaseUrl}/api/v2/workspace/${code}/statements/export/all?${params.toString()}`;
 }
 
 export function hasWorkspaceStatements(data: WorkspaceStatementsResponse | undefined): boolean {

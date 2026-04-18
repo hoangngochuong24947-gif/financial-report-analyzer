@@ -551,5 +551,40 @@ def test_workspace_statement_export_endpoints_return_downloadable_files(tmp_path
         assert history_xlsx.status_code == 200
         assert history_xlsx.headers["content-type"] == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         assert history_xlsx.content[:2] == b"PK"
+
+        history_csv = client.get(
+            "/api/v2/workspace/000001/statements/export/all",
+            params={"format": "csv", "lang": "zh-CN"},
+        )
+        assert history_csv.status_code == 200
+        assert history_csv.headers["content-type"].startswith("text/csv")
+        assert "balance_sheet" in history_csv.content.decode("utf-8-sig")
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_workspace_saved_report_endpoint_returns_404_when_missing(tmp_path):
+    service = _seed_minimal_workspace(tmp_path)
+    app.dependency_overrides[get_workspace_service] = lambda: service
+
+    try:
+        response = client.get("/api/v2/workspace/000001/insights/report", params={"lang": "en-US"})
+        assert response.status_code == 404
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_workspace_historical_period_insight_generation_is_rejected(tmp_path):
+    service = _seed_minimal_workspace(tmp_path)
+    app.dependency_overrides[get_workspace_service] = lambda: service
+
+    try:
+        response = client.post(
+            "/api/v2/workspace/000001/insights/generate",
+            params={"lang": "en-US"},
+            json={"period": "2024-12-31", "lang": "en-US"},
+        )
+        assert response.status_code == 400
+        assert "Historical-period insight generation is not supported yet" in response.json()["detail"]
     finally:
         app.dependency_overrides.clear()
