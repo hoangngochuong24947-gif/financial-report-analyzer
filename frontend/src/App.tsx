@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createCrawlerJob, getCrawlerJobStatus, listStocks, type StockInfo } from "./api/sdk";
-import { listWorkspaces } from "./api/workspace";
+import { listWorkspaces, type WorkspaceSummary } from "./api/workspace";
 import { SectionCard, StateBlock, WorkspaceSummaryList } from "./components/DataBlocks";
 import { WorkspaceChrome } from "./components/WorkspaceChrome";
 import { InsightsPage } from "./pages/InsightsPage";
@@ -68,6 +68,30 @@ function summarizeJobState(copy: ReturnType<typeof getWorkspaceCopy>, state: Cra
   return state.status;
 }
 
+function workspaceToStockInfo(workspace: WorkspaceSummary): StockInfo {
+  return {
+    stock_code: workspace.stock_code,
+    stock_name: workspace.stock_name,
+    market: workspace.market,
+    industry: undefined,
+    list_date: undefined,
+  };
+}
+
+function mergeStockOptions(primary: StockInfo[], fallback: StockInfo[]): StockInfo[] {
+  if (primary.length === 0) {
+    return fallback;
+  }
+
+  const merged = new Map(primary.map((item) => [item.stock_code, item]));
+  for (const item of fallback) {
+    if (!merged.has(item.stock_code)) {
+      merged.set(item.stock_code, item);
+    }
+  }
+  return Array.from(merged.values());
+}
+
 export default function App() {
   const queryClient = useQueryClient();
   const [lang, setLang] = useState<Lang>(getStoredLang);
@@ -76,12 +100,13 @@ export default function App() {
   const [manualCode, setManualCode] = useState("");
   const [crawlTarget, setCrawlTarget] = useState<string | null>(null);
   const [crawlJobId, setCrawlJobId] = useState<string | null>(null);
+  const [stockRefreshVersion, setStockRefreshVersion] = useState(0);
   const { route, metricsView, navigate, navigateMetricsView } = useWorkspaceRoute();
   const copy = getWorkspaceCopy(lang);
 
   const stocksQuery = useQuery({
-    queryKey: ["stocks"],
-    queryFn: () => listStocks(),
+    queryKey: ["stocks", stockRefreshVersion],
+    queryFn: () => listStocks({ refresh: stockRefreshVersion > 0 }),
     staleTime: 10 * 60_000,
   });
 
@@ -92,6 +117,11 @@ export default function App() {
   });
 
   const workspaces = workspacesQuery.data ?? [];
+  const workspaceStockOptions = useMemo(() => workspaces.map(workspaceToStockInfo), [workspaces]);
+  const stockOptions = useMemo(
+    () => mergeStockOptions(stocksQuery.data ?? [], workspaceStockOptions),
+    [stocksQuery.data, workspaceStockOptions],
+  );
   const workspaceCodes = useMemo(() => new Set(workspaces.map((item) => item.stock_code)), [workspaces]);
 
   const createCrawlerMutation = useMutation({
@@ -133,12 +163,12 @@ export default function App() {
 
   useEffect(() => {
     if (!selectedCode) {
-      const initialCode = workspaces[0]?.stock_code ?? stocksQuery.data?.[0]?.stock_code;
+      const initialCode = workspaces[0]?.stock_code ?? stockOptions[0]?.stock_code;
       if (initialCode) {
         setSelectedCode(initialCode);
       }
     }
-  }, [selectedCode, stocksQuery.data, workspaces]);
+  }, [selectedCode, stockOptions, workspaces]);
 
   useEffect(() => {
     if (!selectedCode || workspacesQuery.isLoading || createCrawlerMutation.isPending) {
@@ -186,12 +216,11 @@ export default function App() {
   }, [crawlStatusQuery.data, crawlTarget, queryClient]);
 
   const selectedStock = useMemo(() => {
-    const stockPool = stocksQuery.data ?? [];
-    return stockPool.find((item) => item.stock_code === selectedCode);
-  }, [selectedCode, stocksQuery.data]);
+    return stockOptions.find((item) => item.stock_code === selectedCode);
+  }, [selectedCode, stockOptions]);
 
   const filteredStocks = useMemo(() => {
-    const source = stocksQuery.data ?? [];
+    const source = stockOptions;
     const keyword = search.trim().toLowerCase();
     const filtered = keyword
       ? source.filter((item) => {
@@ -204,7 +233,7 @@ export default function App() {
     return [...filtered]
       .sort((left, right) => Number(workspaceCodes.has(right.stock_code)) - Number(workspaceCodes.has(left.stock_code)))
       .slice(0, 200);
-  }, [search, stocksQuery.data, workspaceCodes]);
+  }, [search, stockOptions, workspaceCodes]);
 
   const selectedHasWorkspace = selectedCode ? workspaceCodes.has(selectedCode) : false;
   const currentJobState = crawlStatusQuery.data as CrawlJobState | undefined;
@@ -246,7 +275,7 @@ export default function App() {
           </label>
 
           <div className="stock-list">
-            {stocksQuery.isLoading ? (
+            {stocksQuery.isLoading && workspaceStockOptions.length === 0 ? (
               <StateBlock title={copy.shared.loading} description={copy.shell.loadingArchive} />
             ) : filteredStocks.length > 0 ? (
               filteredStocks.map((stock) => (
@@ -358,7 +387,11 @@ export default function App() {
           </select>
         </label>
 
-        <button type="button" className="ghost-button" onClick={() => stocksQuery.refetch()}>
+        <button
+          type="button"
+          className="ghost-button"
+          onClick={() => setStockRefreshVersion((current) => current + 1)}
+        >
           {copy.shell.refreshRegistry}
         </button>
       </div>

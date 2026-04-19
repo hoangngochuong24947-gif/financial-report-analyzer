@@ -1,38 +1,14 @@
 {
-  "requests": [
-    {
-      "url": "http://127.0.0.1:5173/src/api/sdk.ts",
-      "status": 200,
-      "duration_s": 0.02
-    },
-    {
-      "url": "http://127.0.0.1:5173/src/api/workspace.ts",
-      "status": 200,
-      "duration_s": 0.02
-    },
-    {
-      "url": "http://127.0.0.1:5173/src/api/client.ts",
-      "status": 200,
-      "duration_s": 0.01
-    },
-    {
-      "url": "http://127.0.0.1:8000/api/v2/stocks",
-      "status": 200,
-      "duration_s": 0.34
-    }
-  ],
-  "console_errors": [],
-  "page_errors": [],
   "steps": [
     {
       "step": "open metrics page",
       "ok": true,
-      "detail": "loaded route http://127.0.0.1:5173/metrics"
+      "detail": "loaded route http://127.0.0.1:5174/metrics"
     },
     {
       "step": "stock list loaded",
       "ok": true,
-      "detail": "200 items visible after 0.91s; first='浦发银行\\n600000\\n主板 · 待归档'"
+      "detail": "200 items visible after 1.62s; first='浦发银行\\n600000\\n主板 · 已归档'"
     },
     {
       "step": "route tabs present",
@@ -42,17 +18,81 @@
     {
       "step": "select first stock",
       "ok": true,
-      "detail": "clicked first stock item and waited 3s"
+      "detail": "clicked first stock item"
     },
     {
       "step": "navigate to models",
       "ok": true,
-      "detail": "http://127.0.0.1:5173/models"
+      "detail": "http://127.0.0.1:5174/models"
     },
     {
       "step": "navigate to insights",
       "ok": true,
-      "detail": "http://127.0.0.1:5173/insights"
+      "detail": "http://127.0.0.1:5174/insights"
     }
-  ]
+  ],
+  "requests": [
+    {
+      "url": "http://127.0.0.1:5174/src/api/sdk.ts",
+      "status": 200,
+      "duration_s": 0.01
+    },
+    {
+      "url": "http://127.0.0.1:5174/src/api/workspace.ts",
+      "status": 200,
+      "duration_s": 0.01
+    },
+    {
+      "url": "http://127.0.0.1:5174/src/api/client.ts",
+      "status": 200,
+      "duration_s": 0.01
+    },
+    {
+      "url": "http://127.0.0.1:8000/api/v2/stocks?refresh=false",
+      "status": 200,
+      "duration_s": 0.23
+    },
+    {
+      "url": "http://127.0.0.1:8000/api/v2/workspaces?limit=5000&lang=zh-CN",
+      "status": 200,
+      "duration_s": 1.5
+    },
+    {
+      "url": "http://127.0.0.1:8000/api/v2/workspace/600000/snapshot?lang=zh-CN",
+      "status": 200,
+      "duration_s": 0.03
+    },
+    {
+      "url": "http://127.0.0.1:8000/api/v2/workspace/600000/metrics/catalog?lang=zh-CN",
+      "status": 200,
+      "duration_s": 0.07
+    },
+    {
+      "url": "http://127.0.0.1:8000/api/v2/workspace/600000/metrics?lang=zh-CN",
+      "status": 200,
+      "duration_s": 0.1
+    },
+    {
+      "url": "http://127.0.0.1:8000/api/v2/workspace/600000/models?lang=zh-CN",
+      "status": 200,
+      "duration_s": 0.03
+    },
+    {
+      "url": "http://127.0.0.1:8000/api/v2/workspace/600000/insights/context?lang=zh-CN",
+      "status": 200,
+      "duration_s": 0.11
+    },
+    {
+      "url": "http://127.0.0.1:8000/api/v2/workspace/600000/insights/report?lang=zh-CN",
+      "status": 404,
+      "duration_s": 0.11
+    }
+  ],
+  "console_errors": [
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    }
+  ],
+  "page_errors": []
 }

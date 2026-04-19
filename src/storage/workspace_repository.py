@@ -62,44 +62,58 @@ class WorkspaceRepository:
         )
 
     def list_workspaces(self, limit: int = 20) -> List[WorkspaceSummary]:
-        summaries: List[WorkspaceSummary] = []
-        for stock_code in self._archive_repository.list_stock_codes():
-            workspace = self.load_workspace(stock_code)
-            summaries.append(
-                WorkspaceSummary(
-                    stock_code=workspace.stock_code,
-                    stock_name=workspace.stock_name,
-                    market=workspace.market,
-                    latest_report_date=workspace.latest_report_date,
-                    dataset_count=len({item.dataset for item in workspace.archives}),
-                    archives=workspace.archives,
+        manifests = self._archive_repository.list_archives(limit=1_000_000)
+        grouped: Dict[str, WorkspaceSummary] = {}
+
+        for manifest in manifests:
+            stock_code = manifest["stock_code"]
+            archive_item = self._manifest_to_archive_item(manifest)
+            summary = grouped.get(stock_code)
+            if summary is None:
+                grouped[stock_code] = WorkspaceSummary(
+                    stock_code=stock_code,
+                    stock_name=manifest.get("stock_name", stock_code),
+                    market=manifest.get("market", "ab"),
+                    latest_report_date=archive_item.report_date,
+                    dataset_count=1,
+                    archives=[archive_item],
                 )
-            )
+                continue
+
+            summary.archives.append(archive_item)
+            summary.dataset_count = len({item.dataset for item in summary.archives})
+            if archive_item.report_date and (
+                summary.latest_report_date is None or archive_item.report_date > summary.latest_report_date
+            ):
+                summary.latest_report_date = archive_item.report_date
+
+        summaries = list(grouped.values())
+        for summary in summaries:
+            summary.archives.sort(key=lambda item: item.fetched_at, reverse=True)
 
         summaries.sort(key=lambda item: item.latest_report_date or "", reverse=True)
         return summaries[:limit]
 
     def _load_archive_items(self, stock_code: str) -> List[WorkspaceArchiveItem]:
         manifests = self._archive_repository.list_archives(stock_code=stock_code, limit=1000)
-        archive_items: List[WorkspaceArchiveItem] = []
-        for manifest in manifests:
-            archive_items.append(
-                WorkspaceArchiveItem(
-                    stock_code=manifest["stock_code"],
-                    stock_name=manifest.get("stock_name", manifest["stock_code"]),
-                    market=manifest.get("market", "ab"),
-                    dataset=manifest["dataset"],
-                    fetched_at=manifest["fetched_at"],
-                    raw_path=manifest["raw_path"],
-                    csv_path=manifest["csv_path"],
-                    manifest_path=manifest["manifest_path"],
-                    row_count=manifest.get("row_count", 0),
-                    status=manifest.get("status", "success"),
-                    report_date=self._extract_report_date(manifest),
-                )
-            )
+        archive_items = [self._manifest_to_archive_item(manifest) for manifest in manifests]
         archive_items.sort(key=lambda item: item.fetched_at, reverse=True)
         return archive_items
+
+    def _manifest_to_archive_item(self, manifest: Dict[str, Any]) -> WorkspaceArchiveItem:
+        return WorkspaceArchiveItem(
+            stock_code=manifest["stock_code"],
+            stock_name=manifest.get("stock_name", manifest["stock_code"]),
+            market=manifest.get("market", "ab"),
+            dataset=manifest["dataset"],
+            fetched_at=manifest["fetched_at"],
+            raw_path=manifest["raw_path"],
+            csv_path=manifest["csv_path"],
+            manifest_path=manifest["manifest_path"],
+            row_count=manifest.get("row_count", 0),
+            status=manifest.get("status", "success"),
+            report_date=self._extract_report_date(manifest),
+        )
 
     def _load_dataset_payloads(self, archive_items: List[WorkspaceArchiveItem]) -> Dict[str, Dict[str, object]]:
         payloads: Dict[str, Dict[str, object]] = {}

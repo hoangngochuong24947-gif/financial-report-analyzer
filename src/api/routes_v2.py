@@ -55,7 +55,9 @@ async def list_stocks_v2(
         stock_items = crawler.fetch_stock_list(market=market, refresh=refresh)
         if stock_items:
             return stock_items
-
+    except Exception as e:
+        logger.warning(f"v2 stock crawler unavailable, falling back to workspace data: {e}")
+    try:
         workspace_items = workspace_service.list_workspaces(limit=5000)
         return [
             StockInfo(

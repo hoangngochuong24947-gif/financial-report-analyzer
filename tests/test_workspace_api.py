@@ -1,8 +1,9 @@
 from datetime import datetime
+from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
-from src.api.dependencies import get_workspace_service
+from src.api.dependencies import get_crawler_service, get_workspace_service
 from src.main import app
 
 
@@ -120,6 +121,54 @@ def test_v2_stock_list_returns_full_stock_universe_not_just_archived_subset():
     assert len(payload) > 1000
     assert any(item["stock_code"] == "601012" for item in payload)
     assert any(item["stock_code"] == "300750" for item in payload)
+
+
+def test_v2_stock_list_falls_back_to_workspace_data_when_crawler_unavailable():
+    class FailingCrawlerService:
+        def fetch_stock_list(self, market=None, refresh=False):
+            raise RuntimeError("crawler unavailable")
+
+    class WorkspaceOnlyService:
+        def list_workspaces(self, limit=20):
+            return [
+                SimpleNamespace(
+                    stock_code="601012",
+                    stock_name="隆基绿能",
+                    market="主板",
+                ),
+                SimpleNamespace(
+                    stock_code="300750",
+                    stock_name="宁德时代",
+                    market="创业板",
+                ),
+            ]
+
+    app.dependency_overrides[get_crawler_service] = lambda: FailingCrawlerService()
+    app.dependency_overrides[get_workspace_service] = lambda: WorkspaceOnlyService()
+
+    try:
+        response = client.get("/api/v2/stocks")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload == [
+        {
+            "stock_code": "601012",
+            "stock_name": "隆基绿能",
+            "industry": None,
+            "market": "主板",
+            "list_date": None,
+        },
+        {
+            "stock_code": "300750",
+            "stock_name": "宁德时代",
+            "industry": None,
+            "market": "创业板",
+            "list_date": None,
+        },
+    ]
 
 
 def test_workspace_snapshot_endpoint_uses_archive_data():
