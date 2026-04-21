@@ -5,6 +5,7 @@ import json
 import sys
 from collections.abc import Iterable
 from datetime import date
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -333,6 +334,9 @@ def import_financial_indicators(cursor: Any, archive_repository: ArchiveReposito
         report_date_value = parse_report_date(str(latest_report_label)) if latest_report_label else None
         latest_value_raw = row.get("latest_value")
         latest_value_num = to_amount(latest_value_raw)
+        latest_value_num_param = None
+        if isinstance(latest_value_num, Decimal) and latest_value_num.is_finite():
+            latest_value_num_param = str(latest_value_num)
         cursor.execute(
             """
             INSERT INTO financial_indicators (
@@ -350,7 +354,7 @@ def import_financial_indicators(cursor: Any, archive_repository: ArchiveReposito
                 latest_report_label,
                 str(row.get("metric", "")),
                 None if latest_value_raw is None else str(latest_value_raw),
-                str(latest_value_num),
+                latest_value_num_param,
             ),
         )
         count += 1
